@@ -35,6 +35,12 @@ class insole_automation_tools( bpy.types.Panel ):
         col    = layout.column()
 
         col.operator( 
+            'import_mesh.stl',
+            text = 'Import STL file',
+            icon = 'IMPORT'
+        )
+
+        col.operator( 
             'object.delete_loose',
             text = 'Delete loose verts',
             icon = 'CANCEL'
@@ -57,7 +63,7 @@ class insole_automation_tools( bpy.types.Panel ):
             text = 'Flatten Front',
             icon = 'BRUSH_FLATTEN'
         )
-        
+
 class delete_loose( bpy.types.Operator ):
     """ Delete vertices not-connected to selected one """
     bl_idname      = "object.delete_loose"
