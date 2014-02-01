@@ -93,8 +93,8 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'BACK'
         )
         
-        bc.prop( context.scene.insole_properties, flat_area )
-        bc.prop( context.scene.insole_properties, falloff   )
+        bc.prop( context.scene.insole_properties, 'flat_area' )
+        bc.prop( context.scene.insole_properties, 'falloff'   )
 
 class delete_loose( bpy.types.Operator ):
     """ Delete vertices not-connected to selected one """
