@@ -77,11 +77,24 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'MOD_SMOOTH'
         )
         
-        col.operator( 
+        b = col.box()
+        bc = b.column()
+        
+        r = bc.row()
+        r.operator( 
             'object.flatten_front',
             text = 'Flatten Front',
             icon = 'BRUSH_FLATTEN'
         )
+        
+        r.operator(
+            'ed.undo',
+            text = 'Undo',
+            icon = 'BACK'
+        )
+        
+        bc.prop( context.scene.insole_properties, flat_area )
+        bc.prop( context.scene.insole_properties, falloff   )
 
 class delete_loose( bpy.types.Operator ):
     """ Delete vertices not-connected to selected one """
@@ -266,8 +279,9 @@ class flatten_front( bpy.types.Operator ):
 
     def execute( self, context ):
         """ Smooths vertices on object """
-        o = context.object        
-
+        o     = context.object        
+        props = context.scene.insole_properties
+        
         # To perform flattenning:
 
         # 1. Go to edit mode and create bmesh object
@@ -285,14 +299,14 @@ class flatten_front( bpy.types.Operator ):
         if idx == -1: return {'FAILED'}
                 
         # 3. Store y dimensions of insole. Find 25% of this value. flat_dist.
-        flat_dist = o.dimensions.y * LENGTH_PERCENTAGE
+        flat_dist = o.dimensions.y * props.flat_area
 
         # 4. Select all vertices that are up to flat_dist from top-y vert.
         min_y = bm.verts[idx].co.y - flat_dist
 
         # Go to vertex selection mode and deselect all verts
-        bpy.ops.mesh.select_mode(type='VERT')
-        bpy.ops.mesh.select_all(action='DESELECT')
+        bpy.ops.mesh.select_mode( type   = 'VERT'     )
+        bpy.ops.mesh.select_all(  action = 'DESELECT' )
 
         # Select all vertices located above minimum Y value
         for v in bm.verts:
@@ -301,9 +315,9 @@ class flatten_front( bpy.types.Operator ):
         # 5. Activate proportional editing tool.
         context.scene.tool_settings.proportional_edit = 'ENABLED'
         
-        # 6. Set it's radius to be 20% of y length of insole (diamter = 40%)
+        # 6. Set proportional size
         context.scene.tool_settings.proportional_size = \
-            o.dimensions.y * LENGTH_PERCENTAGE
+            o.dimensions.y * props.falloff
 
         # 7. Scale all selected verts to 0 on Z axis.
         bpy.ops.transform.resize(
@@ -311,7 +325,7 @@ class flatten_front( bpy.types.Operator ):
             constraint_axis           = (False, False, True), 
             proportional              = 'ENABLED', 
             proportional_edit_falloff = 'SMOOTH',
-            proportional_size         = o.dimensions.y * LENGTH_PERCENTAGE
+            proportional_size         = o.dimensions.y * props.falloff
         )
 
         # 8. Move verts down the Z axis until flat (as high as lowset vert)
@@ -337,7 +351,7 @@ class flatten_front( bpy.types.Operator ):
             constraint_axis           = (False, False, True), 
             proportional              = 'ENABLED', 
             proportional_edit_falloff = 'SMOOTH',
-            proportional_size         = o.dimensions.y * LENGTH_PERCENTAGE
+            proportional_size         = o.dimensions.y * props.falloff
         )        
         
         # 9. Deactivate proportional editing tool.
@@ -373,9 +387,36 @@ class import_and_fit_curve( bpy.types.Operator ):
         
         # Push curve (translate) so that the rearmost point matches
         # the scan's rear vertex.
+
+class insole_props( bpy.types.PropertyGroup ):
+    def update_materials( self, context ):
+        ''' Update visual preview of flattenning effect '''
+        pass
+
+    flat_area = bpy.props.FloatProperty(
+        description = "Percentage of scan to be flattened, from front to back",
+        name        = "Flat Area",
+        default     = 0.25,
+        min         = 0.0,
+        max         = 1.0,
+        update      = update_materials
+    )
+
+    falloff = bpy.props.FloatProperty(
+        name        = "Lamp light intensity",
+        description = "Falloff area of flattenning tool",
+        default     = 0.25,
+        min         = 0.0,
+        max         = 1.0,
+        update      = update_materials
+    )
         
 def register():
     bpy.utils.register_module(__name__)
-    
+    bpy.types.Scene.insole_properties = bpy.props.PointerProperty( 
+        type = insole_props
+    )
+
 def unregister():
     bpy.utils.unregister_module(__name__)
+    bpy.types.Scene.insole_properties = None
