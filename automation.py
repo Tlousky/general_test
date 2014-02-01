@@ -195,9 +195,18 @@ class orient_scan( bpy.types.Operator ):
             if a.type == 'VIEW_3D': 
                 area = a
                 break
-        
+
+        space = area.spaces[0]
+                
+        # Make sure 3D manipulator is displayed
+        if not space.show_manipulator:
+            space.show_manipulator = True
+
+        # Display rotation manipulator
+        space.transform_manipulators = {'ROTATE'}
+            
         # Switch to orthographic mode if not already in it
-        if area.spaces[0].region_3d.view_perspective != 'ORTHO':
+        if space.region_3d.view_perspective != 'ORTHO':
             bpy.ops.view3d.view_persportho()
         
         if self.axis == 'x':
