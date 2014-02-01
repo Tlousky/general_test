@@ -496,14 +496,15 @@ class insole_props( bpy.types.PropertyGroup ):
 
                 # Set material as active on object
                 slot.material = mat
+                mi = o.material_slots.find( materials[ m ] )
+                
+                self.select_area( context, m ) # Select current area's vertices
+                bpy.ops.mesh.select_mode( type = 'FACE' ) # Go to face selection mode
+                bpy.ops.object.mode_set( mode = 'OBJECT' ) # Go to object mode
 
-            self.select_area( context, m ) # Select current area's vertices
-            bpy.ops.mesh.select_mode( type = 'FACE' ) # Go to face selection mode
-            bpy.ops.object.mode_set( mode = 'OBJECT' ) # Go to object mode
-
-            # Assign material to area's polygons
-            for p in o.data.polygons:
-                if p.select: p.material_index = mi
+                # Assign material to area's polygons
+                for p in o.data.polygons:
+                    if p.select: p.material_index = mi
             
     flat_area = bpy.props.FloatProperty(
         description = "Percentage of scan to be flattened, from front to back",
