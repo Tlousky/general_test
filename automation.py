@@ -13,7 +13,7 @@ bl_info = {
     "description" : "Insole preperation automation script"
 }
 
-import bpy, bmesh
+import bpy, bmesh, mathutils
 
 # Constants
 MAX_FACES         = 10000
@@ -51,6 +51,25 @@ class insole_automation_tools( bpy.types.Panel ):
             text = 'Reduce to %s faces' % MAX_FACES,
             icon = 'MOD_DECIM'
         )
+       
+        r = col.row()
+        r.operator( 
+            'object.orient_scan',
+            text = 'Front',
+            icon = 'AXIS_FRONT'
+        ).axis = 'y'
+
+        r.operator( 
+            'object.orient_scan',
+            text = 'Left',
+            icon = 'AXIS_SIDE'
+        ).axis = 'x'
+
+        r.operator( 
+            'object.orient_scan',
+            text = 'Top',
+            icon = 'AXIS_TOP'
+        ).axis = 'z'
         
         col.operator( 
             'object.smooth_verts',
@@ -108,6 +127,9 @@ class delete_loose( bpy.types.Operator ):
         # Return to object mode
         bpy.ops.object.mode_set(mode = 'OBJECT')
         
+        # Clear Location (place object on axis origin)
+        bpy.ops.object.location_clear()
+        
         return {'FINISHED'}
         
 class decimate_object( bpy.types.Operator ):
@@ -151,6 +173,47 @@ class decimate_object( bpy.types.Operator ):
         
         return {'FINISHED'}
 
+class orient_scan( bpy.types.Operator ):
+    """ Quickly orient insole from top, right or front view """
+    bl_idname      = "object.orient_scan"
+    bl_label       = "Orient Scan" 
+    bl_description = "Quickly orient insole from top, right or front view"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    axis = bpy.props.StringProperty()
+    
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with MESH type objects '''
+        return context.object.type == 'MESH' and context.object.select
+
+    def execute( self, context ):
+        """ Orient from selected view """
+        o = context.object
+        
+        for a in bpy.data.window_managers[0].windows[0].screen.areas:
+            if a.type == 'VIEW_3D': 
+                area = a
+                break
+        
+        # Switch to orthographic mode if not already in it
+        if area.spaces[0].region_3d.view_perspective != 'ORTHO':
+            bpy.ops.view3d.view_persportho()
+        
+        if self.axis == 'x':
+            bpy.ops.view3d.viewnumpad( type = 'LEFT' )
+        
+        elif self.axis == 'y':
+            bpy.ops.view3d.viewnumpad( type = 'FRONT' )
+        
+        else: # self.axis == 'z'
+            bpy.ops.view3d.viewnumpad( type = 'TOP' )
+
+        # Center view on object
+        bpy.ops.view3d.view_selected()
+        
+        return {'FINISHED'}
+            
 class smooth_verts( bpy.types.Operator ):
     """ Smooths all vertices on object """
     bl_idname      = "object.smooth_verts"
