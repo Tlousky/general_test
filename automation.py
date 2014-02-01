@@ -454,57 +454,81 @@ class insole_props( bpy.types.PropertyGroup ):
         
         bpy.ops.object.mode_set(mode ='OBJECT')
 
+        '''
+        There's several paths for the operation of this function:
+        1. If the material representing one of the preview areas doesn't exist,
+           we must first create it. Otherwise, we must store a reference to it.
+        2. If it exists, then we need to assign it to a material slot on the
+           selected object:
+           2.1. It could alredy be assigned to one of the material slots, in
+                which case we'll only need to store the index of this slot.
+           2.2. Otherwise, we need to assign it to an empty slot, if there's one.
+           2.3. Or create a new slot if there's no empty slot.
+        3. After we have the material assigned to a material slot, we need to
+           assign that material only to the relevant geomatry (flat, mid or 
+           unchanged).
+        '''
+        
         # Create preview materials if they do not exist
         for m in materials:
+            print( "Processing mat: %s" % materials[ m ] )
+
             # If this material exists, skip it
+            material_created = False
             if materials[ m ] in bpy.data.materials.keys():
                 material_created = True
                 mat = bpy.data.materials[ materials[ m ] ]
-
-            # Find current material's index in active object's material slots
-            mi = -1 # Value if material not found on object
-
-            if len( o.material_slots ) > 0: # If obj has any materials
-                for i, ms in enumerate( o.material_slots ):
-                    if ms.material and ms.material.name == materials[ m ]:
-                        mi = i
-
-            if not material_created: # Then create material
+                print( "\tfound material in data" )
+            else:
                 bpy.ops.material.new()
                 mat               = bpy.data.materials[-1]
                 mat.name          = materials[ m ]
+                print( "\tCreated new material" )
 
             mat.diffuse_color = colors[ m ]
             mat.use_shadeless = True
             
+            # Find current material's index in active object's material slots
+            mi = -1 # Value if material not found on object
+            if material_created and materials[ m ] in o.material_slots.keys():
+                mi = o.material_slots.find( materials[ m ] )
+                print( "\tFound material in obj slot %s" % str(mi) )
+
             if mi == -1:
                 # Check if there's an empty slot
                 empty_slot = False
                 for ms in o.material_slots:
-                    if not ms.material: 
+                    if not ms.material:
+                        print( "\tFound empty slot", ms )
                         empty_slot = ms
                         break
                 
                 slot = False
-
                 if empty_slot: 
                     slot = empty_slot
                 else:
                     # Otherwise, add a slot
                     bpy.ops.object.material_slot_add()
-                    slot = o.material_slots[-1]                    
+                    slot = o.material_slots[-1]
+                    print( "\tAdding new slot", slot )
 
-                # Set material as active on object
+                # Assign material to slot
                 slot.material = mat
                 mi = o.material_slots.find( materials[ m ] )
+                print( "\tSlot assigned with material is idx: %s" % str(mi) )
                 
-                self.select_area( context, m ) # Select current area's vertices
-                bpy.ops.mesh.select_mode( type = 'FACE' ) # Go to face selection mode
-                bpy.ops.object.mode_set( mode = 'OBJECT' ) # Go to object mode
+            self.select_area( context, m ) # Select current area's vertices
+            bpy.ops.mesh.select_mode( type = 'FACE' ) # Go to face selection mode
+            bpy.ops.object.mode_set( mode = 'OBJECT' ) # Go to object mode
 
-                # Assign material to area's polygons
-                for p in o.data.polygons:
-                    if p.select: p.material_index = mi
+            # Assign material to area's polygons
+            count = 0
+            for p in o.data.polygons:
+                if p.select: 
+                    p.material_index = mi
+                    count += 1
+            
+            print( "\tAssigned slot %s to %s faces" % ( str(mi), count ) )
             
     flat_area = bpy.props.FloatProperty(
         description = "Percentage of scan to be flattened, from front to back",
@@ -518,7 +542,7 @@ class insole_props( bpy.types.PropertyGroup ):
 
     falloff = bpy.props.FloatProperty(
         description = "Falloff area of flattenning tool",
-        name        = "Falloff",
+        name        = "Flat Falloff",
         subtype     = 'FACTOR',
         default     = 0.25,
         min         = 0.0,
@@ -534,4 +558,3 @@ def register():
 
 def unregister():
     bpy.utils.unregister_module(__name__)
-    bpy.types.Scene.insole_properties = None
