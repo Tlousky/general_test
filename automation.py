@@ -14,6 +14,7 @@ bl_info = {
 }
 
 import bpy, bmesh
+from mathutils import Color
 
 # Constants
 MAX_FACES         = 10000
@@ -390,7 +391,7 @@ class import_and_fit_curve( bpy.types.Operator ):
         # the scan's rear vertex.
 
 class insole_props( bpy.types.PropertyGroup ):
-    def select_area( self, context, area_type == 'flat' ):
+    def select_area( self, context, area_type = 'flat' ):
         ''' Select the flat area as defined by the % in the flat area property '''
 
         o = context.object
