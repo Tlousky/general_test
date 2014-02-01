@@ -57,19 +57,19 @@ class insole_automation_tools( bpy.types.Panel ):
             'object.orient_scan',
             text = 'Front',
             icon = 'AXIS_FRONT'
-        ).axis = 'FRONT'
+        ).view = 'FRONT'
 
         r.operator( 
             'object.orient_scan',
             text = 'Left',
             icon = 'AXIS_SIDE'
-        ).axis = 'LEFT'
+        ).view = 'LEFT'
 
         r.operator( 
             'object.orient_scan',
             text = 'Top',
             icon = 'AXIS_TOP'
-        ).axis = 'TOP'
+        ).view = 'TOP'
         
         col.operator( 
             'object.smooth_verts',
@@ -210,7 +210,7 @@ class orient_scan( bpy.types.Operator ):
             bpy.ops.view3d.view_persportho()
 
         
-        bpy.ops.view3d.viewnumpad( type = view )
+        bpy.ops.view3d.viewnumpad( type = self.view )
         
         # Center view on object
         bpy.ops.view3d.view_selected()
