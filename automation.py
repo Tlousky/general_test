@@ -57,19 +57,19 @@ class insole_automation_tools( bpy.types.Panel ):
             'object.orient_scan',
             text = 'Front',
             icon = 'AXIS_FRONT'
-        ).axis = 'y'
+        ).axis = 'FRONT'
 
         r.operator( 
             'object.orient_scan',
             text = 'Left',
             icon = 'AXIS_SIDE'
-        ).axis = 'x'
+        ).axis = 'LEFT'
 
         r.operator( 
             'object.orient_scan',
             text = 'Top',
             icon = 'AXIS_TOP'
-        ).axis = 'z'
+        ).axis = 'TOP'
         
         col.operator( 
             'object.smooth_verts',
@@ -174,13 +174,13 @@ class decimate_object( bpy.types.Operator ):
         return {'FINISHED'}
 
 class orient_scan( bpy.types.Operator ):
-    """ Quickly orient insole from top, right or front view """
+    """ Quickly orient insole from top, left or front view """
     bl_idname      = "object.orient_scan"
     bl_label       = "Orient Scan" 
-    bl_description = "Quickly orient insole from top, right or front view"
+    bl_description = "Quickly orient insole from top, left or front view"
     bl_options     = {'REGISTER', 'UNDO'}
 
-    axis = bpy.props.StringProperty()
+    view = bpy.props.StringProperty()
     
     @classmethod
     def poll( self, context ):
@@ -208,16 +208,10 @@ class orient_scan( bpy.types.Operator ):
         # Switch to orthographic mode if not already in it
         if space.region_3d.view_perspective != 'ORTHO':
             bpy.ops.view3d.view_persportho()
-        
-        if self.axis == 'x':
-            bpy.ops.view3d.viewnumpad( type = 'LEFT' )
-        
-        elif self.axis == 'y':
-            bpy.ops.view3d.viewnumpad( type = 'FRONT' )
-        
-        else: # self.axis == 'z'
-            bpy.ops.view3d.viewnumpad( type = 'TOP' )
 
+        
+        bpy.ops.view3d.viewnumpad( type = view )
+        
         # Center view on object
         bpy.ops.view3d.view_selected()
         
