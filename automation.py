@@ -13,7 +13,7 @@ bl_info = {
     "description" : "Insole preperation automation script"
 }
 
-import bpy, bmesh, mathutils
+import bpy, bmesh
 
 # Constants
 MAX_FACES         = 10000
@@ -87,6 +87,12 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'BRUSH_FLATTEN'
         )
         
+        r.operator( 
+            'object.preview_flatten',
+            text = 'Preview',
+            icon = 'PREVIEW_RANGE'
+        )        
+
         r.operator(
             'ed.undo',
             text = 'Undo',
@@ -287,30 +293,9 @@ class flatten_front( bpy.types.Operator ):
         # 1. Go to edit mode and create bmesh object
         if o.mode != 'EDIT': bpy.ops.object.mode_set(mode = 'EDIT')
         bm = bmesh.from_edit_mesh( o.data )
-        
-        # 2. Find the vertex with the highest Y value
-        max_y = -1000
-        idx  = -1
-        for v in bm.verts:
-            if v.co.y > max_y:
-                max_y = v.co.y
-                idx   = v.index
 
-        if idx == -1: return {'FAILED'}
-                
-        # 3. Store y dimensions of insole. Find 25% of this value. flat_dist.
-        flat_dist = o.dimensions.y * props.flat_area
-
-        # 4. Select all vertices that are up to flat_dist from top-y vert.
-        min_y = bm.verts[idx].co.y - flat_dist
-
-        # Go to vertex selection mode and deselect all verts
-        bpy.ops.mesh.select_mode( type   = 'VERT'     )
-        bpy.ops.mesh.select_all(  action = 'DESELECT' )
-
-        # Select all vertices located above minimum Y value
-        for v in bm.verts:
-            if v.co.y > min_y: v.select = True
+        # Select flat area verts (as defined by flat area property)
+        props.select_area( context, 'flat' )
         
         # 5. Activate proportional editing tool.
         context.scene.tool_settings.proportional_edit = 'ENABLED'
@@ -362,6 +347,22 @@ class flatten_front( bpy.types.Operator ):
         
         return {'FINISHED'}
 
+class preview_flatten( bpy.types.Operator ):
+    """ Flatten the front (toe) area of the foot """
+    bl_idname      = "object.preview_flatten"
+    bl_label       = "Preview flatenning"
+    bl_description = "Preview the flatenning of the insole's front area"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with selected MESH type objects '''
+        return context.object.type == 'MESH' and context.object.select
+
+    def execute( self, context ):
+        context.scene.insole_properties.update_materials( context )
+        return {'FINISHED'}
+
 class import_and_fit_curve( bpy.types.Operator ):
     """ *** TODO: FIX bl constants *** """
     bl_idname      = "object.import_and_fit_curve" 
@@ -389,10 +390,100 @@ class import_and_fit_curve( bpy.types.Operator ):
         # the scan's rear vertex.
 
 class insole_props( bpy.types.PropertyGroup ):
+    def select_area( self, context, area_type == 'flat' ):
+        ''' Select the flat area as defined by the % in the flat area property '''
+
+        o = context.object
+
+        # 1. Go to edit mode and create bmesh object
+        if o.mode != 'EDIT': bpy.ops.object.mode_set(mode = 'EDIT')
+        bm = bmesh.from_edit_mesh( o.data )
+        
+        # 2. Find the vertex with the highest Y value
+        max_y = -1000
+        idx   = -1
+        for v in bm.verts:
+            if v.co.y > max_y:
+                max_y = v.co.y
+                idx   = v.index
+
+        if idx == -1: return {'FAILED'}
+                
+        # 3. Store y dimensions of insole. Find 25% of this value. flat_dist.
+        flat_dist = o.dimensions.y * props.flat_area
+
+        mid_point = flat_dist - o.dimensions.y * props.falloff / 2
+        
+        # 4. Select all vertices that are up to flat_dist from top-y vert.
+        flat_y = bm.verts[idx].co.y - flat_dist
+        mid_y  = bm.verts[idx].co.y - mid_point
+
+        # Go to vertex selection mode and deselect all verts
+        bpy.ops.mesh.select_mode( type   = 'VERT'     )
+        bpy.ops.mesh.select_all(  action = 'DESELECT' )
+        
+        # Select all vertices located above minimum Y value
+        if area_type == 'flat':
+            for v in bm.verts:
+                if v.co.y > flat_y: v.select = True
+        elif area_type == 'mid':
+            for v in bm.verts:
+                if v.co.y < flat_y and v.co.y > mid_y: v.select = True
+        else: # Select all unchanged ('orig') vertices
+            for v in bm.verts:
+                if v.co.y < mid_y: v.select = True
+
     def update_materials( self, context ):
         ''' Update visual preview of flattenning effect '''
-        pass
 
+        o = context.object
+
+        materials = {
+            'flat' : 'flat_front_insole.mat',
+            'mid'  : 'transition_insole.mat',
+            'orig' : 'unchanged_insole.mat'
+        }
+
+        colors = { 
+            'flat' : Color( ( 1.0, 0.0, 0.0 ) ), # Pure red
+            'mid'  : Color( ( 0.5, 0.25, 0  ) ), # Yellow
+            'orig' : Color( ( 0.0, 0.0, 1.0 ) ) # Pure blue
+        }
+        
+        bpy.ops.object.mode_set(mode ='OBJECT')
+
+        # Create preview materials if they do not exist
+        for m in materials:
+            # If this material exists, skip it
+            material_created = materials[ m ] in bpy.data.materials.keys()
+
+            # Find current material's index in active object's material slots
+            mi = -1 # Value if material not found on object
+            for i, mat_name in [ o.material.name for o in o.material_slots ]:
+                if mat_name == materials[ m ]: mi = i
+
+            if not material_created: # Then create material
+                bpy.ops.material.new()
+                mat               = bpy.data.materials[-1]
+                mat.name          = materials[ m ]
+                mat.color         = colors[ m ]
+                mat.use_shadeless = True
+            
+            if mi == -1:
+                # Otherwise, add it and assign it to active object
+                bpy.ops.object.material_slot_add()
+
+                # Set material as active on object
+                context.object.material_slots[0].material = mat
+
+            self.select_area( context, m ) # Select current area's vertices
+            bpy.ops.mesh.select_mode( type = 'FACE' ) # Go to face selection mode
+            bpy.ops.object.mode_set( mode = 'OBJECT' ) # Go to object mode
+
+            # Assign material to area's polygons
+            for p in o.data.polygons:
+                if p.select: p.material_index = mi
+            
     flat_area = bpy.props.FloatProperty(
         description = "Percentage of scan to be flattened, from front to back",
         name        = "Flat Area",
