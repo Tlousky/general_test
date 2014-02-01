@@ -456,7 +456,9 @@ class insole_props( bpy.types.PropertyGroup ):
         # Create preview materials if they do not exist
         for m in materials:
             # If this material exists, skip it
-            material_created = materials[ m ] in bpy.data.materials.keys()
+            if materials[ m ] in bpy.data.materials.keys():
+                material_created = True
+                mat = bpy.data.materials[ materials[ m ] ]
 
             # Find current material's index in active object's material slots
             mi = -1 # Value if material not found on object
@@ -467,8 +469,9 @@ class insole_props( bpy.types.PropertyGroup ):
                 bpy.ops.material.new()
                 mat               = bpy.data.materials[-1]
                 mat.name          = materials[ m ]
-                mat.color         = colors[ m ]
-                mat.use_shadeless = True
+
+            mat.diffuse_color = colors[ m ]
+            mat.use_shadeless = True
             
             if mi == -1:
                 # Otherwise, add it and assign it to active object
