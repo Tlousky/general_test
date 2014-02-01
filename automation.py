@@ -396,7 +396,7 @@ class insole_props( bpy.types.PropertyGroup ):
     flat_area = bpy.props.FloatProperty(
         description = "Percentage of scan to be flattened, from front to back",
         name        = "Flat Area",
-        subtype     = 'PERCENTAGE',
+        subtype     = 'FACTOR',
         default     = 0.25,
         min         = 0.0,
         max         = 1.0,
@@ -404,9 +404,9 @@ class insole_props( bpy.types.PropertyGroup ):
     )
 
     falloff = bpy.props.FloatProperty(
-        name        = "Lamp light intensity",
         description = "Falloff area of flattenning tool",
-        subtype     = 'PERCENTAGE',
+        name        = "Falloff",
+        subtype     = 'FACTOR',
         default     = 0.25,
         min         = 0.0,
         max         = 1.0,
