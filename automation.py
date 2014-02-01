@@ -394,7 +394,8 @@ class insole_props( bpy.types.PropertyGroup ):
     def select_area( self, context, area_type = 'flat' ):
         ''' Select the flat area as defined by the % in the flat area property '''
 
-        o = context.object
+        o     = context.object
+        props = context.scene.insole_properties
 
         # 1. Go to edit mode and create bmesh object
         if o.mode != 'EDIT': bpy.ops.object.mode_set(mode = 'EDIT')
@@ -462,8 +463,11 @@ class insole_props( bpy.types.PropertyGroup ):
 
             # Find current material's index in active object's material slots
             mi = -1 # Value if material not found on object
-            for i, mat_name in [ o.material.name for o in o.material_slots ]:
-                if mat_name == materials[ m ]: mi = i
+
+            if len( o.material_slots ) > 0: # If obj has any materials
+                for i, ms in enumerate( o.material_slots ):
+                    if ms.material and ms.material.name == materials[ m ]:
+                        mi = i
 
             if not material_created: # Then create material
                 bpy.ops.material.new()
@@ -474,11 +478,24 @@ class insole_props( bpy.types.PropertyGroup ):
             mat.use_shadeless = True
             
             if mi == -1:
-                # Otherwise, add it and assign it to active object
-                bpy.ops.object.material_slot_add()
+                # Check if there's an empty slot
+                empty_slot = False
+                for ms in o.material_slots:
+                    if not ms.material: 
+                        empty_slot = ms
+                        break
+                
+                slot = False
+
+                if empty_slot: 
+                    slot = empty_slot
+                else:
+                    # Otherwise, add a slot
+                    bpy.ops.object.material_slot_add()
+                    slot = o.material_slots[-1]                    
 
                 # Set material as active on object
-                context.object.material_slots[0].material = mat
+                slot.material = mat
 
             self.select_area( context, m ) # Select current area's vertices
             bpy.ops.mesh.select_mode( type = 'FACE' ) # Go to face selection mode
