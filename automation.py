@@ -85,7 +85,7 @@ class delete_loose( bpy.types.Operator ):
         bpy.ops.object.origin_set( type = 'ORIGIN_GEOMETRY' )
 
         # Find the closest vert to the origin point
-        closest_vert_idx = o.closest_point_on_mesh( C.object.location )[2]
+        closest_vert_idx = o.closest_point_on_mesh( o.location )[2]
         
         # Go to edit mode and deselect all verts
         bpy.ops.object.mode_set( mode   = 'EDIT'     )
