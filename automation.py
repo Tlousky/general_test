@@ -73,19 +73,31 @@ class delete_loose( bpy.types.Operator ):
 
     @classmethod
     def poll( self, context ):
-        ''' Only works in edit mode of mesh objects '''
-        omode = context.object.mode == 'EDIT' # In edit mode
-        otype = context.object.type == 'MESH' # Is of mesh type 
-        return omode and otype
+        ''' Only works with MESH type objects '''
+        return context.object.type == 'MESH' and context.object.select
 
     def execute( self, context ):
         """ Deletes all the verts that aren't connected to the selected one """
-
-        bpy.ops.object.mode_set(mode = 'EDIT') # Go to edit mode to create bmesh
         o = bpy.context.object
+        
+        # Go to object mode and set origin to geometry
+        if o.mode != 'OBJECT': bpy.ops.object.mode_set(mode = 'OBJECT')
+        bpy.ops.object.origin_set( type = 'ORIGIN_GEOMETRY' )
 
+        # Find the closest vert to the origin point
+        closest_vert_idx = o.closest_point_on_mesh( C.object.location )[2]
+        
+        # Go to edit mode and deselect all verts
+        bpy.ops.object.mode_set( mode   = 'EDIT'     )
+        bpy.ops.mesh.select_all( action = 'DESELECT' )
+        
+        # Go to object mode and select closest vert to origin
+        bpy.ops.object.mode_set( mode = 'OBJECT' )
+        o.data.vertices[ closest_vert_idx ].select = True
+        
         # Select all verts linked to this one (on the same island or "loose part")
-        bpy.ops.mesh.select_linked( limit = False )
+        bpy.ops.object.mode_set(    mode  = 'EDIT' )
+        bpy.ops.mesh.select_linked( limit = False  )
         
         # Selecte inverse (all non-connected verts)
         bpy.ops.mesh.select_all( action = 'INVERT' )
@@ -113,7 +125,7 @@ class decimate_object( bpy.types.Operator ):
     def execute( self, context ):
         """ Reduces poly count by creating and applying a decimate modifier """
         ## Create decimate modifier and set its properties
-        bpy.ops.object.modifier_add(type='DECIMATE')
+        bpy.ops.object.modifier_add( type='DECIMATE' )
         o = context.object
 
         # Reference last modifier (the decimate mod we just created)
