@@ -422,12 +422,14 @@ class insole_props( bpy.types.PropertyGroup ):
         o     = context.object
         props = context.scene.insole_properties
 
+        print( "Select area called on area: %s" % area_type )
+        
         # 1. Go to edit mode and create bmesh object
         if o.mode != 'EDIT': bpy.ops.object.mode_set(mode = 'EDIT')
         bm = bmesh.from_edit_mesh( o.data )
         
         # 2. Find the vertex with the highest Y value
-        max_y = -1000
+        max_y = -10000
         idx   = -1
         for v in bm.verts:
             if v.co.y > max_y:
@@ -438,27 +440,38 @@ class insole_props( bpy.types.PropertyGroup ):
                 
         # 3. Store y dimensions of insole. Find 25% of this value. flat_dist.
         flat_dist = o.dimensions.y * props.flat_area
-
-        mid_point = flat_dist - o.dimensions.y * props.falloff / 2
+        mid_size  = o.dimensions.y * props.falloff / 2
         
         # 4. Select all vertices that are up to flat_dist from top-y vert.
         flat_y = bm.verts[idx].co.y - flat_dist
-        mid_y  = bm.verts[idx].co.y - mid_point
+        mid_y  = flat_y - mid_size
+
+        
+        print( "FlatY: %s  midY: %s" % ( flat_y, mid_y ) )
 
         # Go to vertex selection mode and deselect all verts
         bpy.ops.mesh.select_mode( type   = 'VERT'     )
         bpy.ops.mesh.select_all(  action = 'DESELECT' )
         
         # Select all vertices located above minimum Y value
+        orig_verts = mid_verts = flat_verts = 0
         if area_type == 'flat':
             for v in bm.verts:
-                if v.co.y > flat_y: v.select = True
+                if v.co.y > flat_y: 
+                    v.select = True
+                    flat_verts += 1
         elif area_type == 'mid':
             for v in bm.verts:
-                if v.co.y < flat_y and v.co.y > mid_y: v.select = True
+                if v.co.y < flat_y and v.co.y > mid_y: 
+                    v.select = True
+                    mid_verts += 1
         else: # Select all unchanged ('orig') vertices
             for v in bm.verts:
-                if v.co.y < mid_y: v.select = True
+                if v.co.y < mid_y: 
+                    v.select = True
+                    orig_verts += 1
+        
+        print( "selected flt: %s  mid: %s  org: %s" % ( flat_verts, mid_verts, orig_verts ) )
                 
         return idx
 
@@ -476,7 +489,7 @@ class insole_props( bpy.types.PropertyGroup ):
         colors = { 
             'flat' : Color( ( 1.0, 0.0, 0.0 ) ), # Pure red
             'mid'  : Color( ( 0.5, 0.25, 0  ) ), # Yellow
-            'orig' : Color( ( 0.0, 0.0, 1.0 ) ) # Pure blue
+            'orig' : Color( ( 0.0, 0.0, 1.0 ) )  # Pure blue
         }
 
         # First make sure all 3 materials exist in file data
@@ -487,9 +500,8 @@ class insole_props( bpy.types.PropertyGroup ):
 
                 # Find last material
                 last_new_mat   = ''
-                data_materials = bpy.data.materials.keys()
-                for m in data_materials:
-                    if 'Material' in m and m > last_new_mat: last_new_mat = m
+                for k in bpy.data.materials.keys():
+                    if 'Material' in k and k > last_new_mat: last_new_mat = k
 
                 mat               = bpy.data.materials[ last_new_mat ]
                 mat.name          = materials[ m ]
@@ -503,43 +515,31 @@ class insole_props( bpy.types.PropertyGroup ):
         bpy.ops.object.mode_set(mode ='OBJECT')
 
         for m in mat_refs:
-            print( "Processing mat: %s" % materials[ m ] )
-
             # Find current material's index in active object's material slots
             mi = -1 # Value if material not found on object
             for i, ms in enumerate( o.material_slots ):
                 if ms.material and ms.material.name == mat_refs[ m ].name:
                     mi = i
-                    print( "\tFound material in slot %s" % str(mi) )
-
             if mi == -1:
                 # Check if there's an empty slot
                 slot = empty_slot = False
                 for ms in o.material_slots:
                     if not ms.material:
-                        print( "\tFound empty slot", ms )
                         slot = empty_slot = ms
                         break
 
                 if not empty_slot: # No empty slot? then add a slot
                     bpy.ops.object.material_slot_add()
                     slot = o.material_slots[-1]
-                    print( "\tAdding new slot", slot )
 
                 # Assign material to slot
                 slot.material = mat_refs[ m ]
                 for i, ms in enumerate( o.material_slots ):
                     if ms.material and ms.material.name == mat_refs[ m ].name:
                         mi = i
-                print( "\tSlot assigned with material %s is idx: %s" % ( mat_refs[ m ].name, str(mi)) )
                 
             self.select_area( context, m ) # Select current area's vertices
-            print( "\tattempted to select '%s' faces" % m )
-            print( 
-                "\tSelected faces: %s" % str(
-                    len([ p for p in o.data.polygons if p.select])
-                )
-            )
+
             bpy.ops.mesh.select_mode( type = 'FACE' ) # Go to face selection mode
             bpy.ops.object.mode_set( mode = 'OBJECT' ) # Go to object mode
 
