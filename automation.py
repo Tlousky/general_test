@@ -117,14 +117,15 @@ class delete_loose( bpy.types.Operator ):
 
     def execute( self, context ):
         """ Deletes all the verts that aren't connected to the selected one """
-        o = bpy.context.object
+        o     = bpy.context.object
+        props = context.scene.insole_properties
         
         # Go to object mode and set origin to geometry
         if o.mode != 'OBJECT': bpy.ops.object.mode_set(mode = 'OBJECT')
         bpy.ops.object.origin_set( type = 'ORIGIN_GEOMETRY' )
 
         # Find the closest vert to the origin point
-        closest_vert_idx = o.closest_point_on_mesh( o.location )[2]
+        closest_vert_idx = props.find_nearest_vert( o, o.location )
         
         # Go to edit mode and deselect all verts
         bpy.ops.object.mode_set( mode   = 'EDIT'     )
@@ -391,6 +392,24 @@ class import_and_fit_curve( bpy.types.Operator ):
         # the scan's rear vertex.
 
 class insole_props( bpy.types.PropertyGroup ):
+    def find_nearest_vert( self, obj, point):
+        """ Find the closest vert on the mesh to provided point """
+
+        closest_vert      = -1
+        smallest_distance = 10000
+
+        for v in obj.data.vertices:
+            pt1 = v.co * obj.matrix_world # convert to global coordinates
+            pt2 = point
+            distance = \ # Sum of absolute distances in XYZ
+                abs(pt1.x - pt2.x) + abs(pt1.y - pt2.y) + abs(pt1.z - pt2.z)
+
+            if distance < smallest_distance:
+                smallest_distance = distance
+                closest_vert      = v.index
+            
+        return closest_vert
+
     def select_area( self, context, area_type = 'flat' ):
         ''' Select the flat area as defined by the % in the flat area property '''
 
@@ -478,44 +497,44 @@ class insole_props( bpy.types.PropertyGroup ):
             if materials[ m ] in bpy.data.materials.keys():
                 material_created = True
                 mat = bpy.data.materials[ materials[ m ] ]
-                print( "\tfound material in data" )
+                print( "\tfound material %s in data" % mat.name )
             else:
                 bpy.ops.material.new()
                 mat               = bpy.data.materials[-1]
                 mat.name          = materials[ m ]
-                print( "\tCreated new material" )
+                print( "\tCreated new material %s" % mat.name )
 
             mat.diffuse_color = colors[ m ]
             mat.use_shadeless = True
             
             # Find current material's index in active object's material slots
             mi = -1 # Value if material not found on object
-            if material_created and materials[ m ] in o.material_slots.keys():
-                mi = o.material_slots.find( materials[ m ] )
-                print( "\tFound material in obj slot %s" % str(mi) )
+            if material_created:
+                for i, ms in enumerate( o.material_slots ):
+                    if ms.material and ms.material.name == materials[ m ]:
+                        mi = i
+                        print( "\tFound material in slot %s" % str(mi) )
 
             if mi == -1:
                 # Check if there's an empty slot
-                empty_slot = False
+                slot = empty_slot = False
                 for ms in o.material_slots:
                     if not ms.material:
                         print( "\tFound empty slot", ms )
-                        empty_slot = ms
+                        slot = empty_slot = ms
                         break
-                
-                slot = False
-                if empty_slot: 
-                    slot = empty_slot
-                else:
-                    # Otherwise, add a slot
+
+                if not empty_slot: # No empty slot? then add a slot
                     bpy.ops.object.material_slot_add()
                     slot = o.material_slots[-1]
                     print( "\tAdding new slot", slot )
 
                 # Assign material to slot
                 slot.material = mat
-                mi = o.material_slots.find( materials[ m ] )
-                print( "\tSlot assigned with material is idx: %s" % str(mi) )
+                for i, ms in enumerate( o.material_slots ):
+                    if ms.material and ms.material.name == materials[ m ]:
+                        mi = i
+                print( "\tSlot assigned with material %s is idx: %s" % ( mat.name, str(mi)) )
                 
             self.select_area( context, m ) # Select current area's vertices
             bpy.ops.mesh.select_mode( type = 'FACE' ) # Go to face selection mode
