@@ -478,50 +478,39 @@ class insole_props( bpy.types.PropertyGroup ):
             'mid'  : Color( ( 0.5, 0.25, 0  ) ), # Yellow
             'orig' : Color( ( 0.0, 0.0, 1.0 ) ) # Pure blue
         }
+
+        # First make sure all 3 materials exist in file data
+        mat_refs = {}
+        for m in materials:
+            if materials[ m ] not in bpy.data.materials.keys():
+                bpy.ops.material.new()
+
+                # Find last material
+                last_new_mat   = ''
+                data_materials = bpy.data.materials.keys()
+                for m in data_materials:
+                    if 'Material in m and m > last_new_mat: last_new_mat = m
+
+                mat               = bpy.data.materials[ last_new_mat ]
+                mat.name          = materials[ m ]
+                mat.diffuse_color = colors[ m ]
+                mat.use_shadeless = True
+                mat_refs[ m ] = mat # Create reference in dictionary
+            else:
+                mat_refs[ m ] = bpy.data.materials[ materials[ m ] ]
         
+
         bpy.ops.object.mode_set(mode ='OBJECT')
 
-        '''
-        There's several paths for the operation of this function:
-        1. If the material representing one of the preview areas doesn't exist,
-           we must first create it. Otherwise, we must store a reference to it.
-        2. If it exists, then we need to assign it to a material slot on the
-           selected object:
-           2.1. It could alredy be assigned to one of the material slots, in
-                which case we'll only need to store the index of this slot.
-           2.2. Otherwise, we need to assign it to an empty slot, if there's one.
-           2.3. Or create a new slot if there's no empty slot.
-        3. After we have the material assigned to a material slot, we need to
-           assign that material only to the relevant geomatry (flat, mid or 
-           unchanged).
-        '''
-        
-        # Create preview materials if they do not exist
-        for m in materials:
+        for m in mat_refs:
             print( "Processing mat: %s" % materials[ m ] )
 
-            # If this material exists, skip it
-            material_created = False
-            if materials[ m ] in bpy.data.materials.keys():
-                material_created = True
-                mat = bpy.data.materials[ materials[ m ] ]
-                print( "\tfound material %s in data" % mat.name )
-            else:
-                bpy.ops.material.new()
-                mat               = bpy.data.materials[-1]
-                mat.name          = materials[ m ]
-                print( "\tCreated new material %s" % mat.name )
-
-            mat.diffuse_color = colors[ m ]
-            mat.use_shadeless = True
-            
             # Find current material's index in active object's material slots
             mi = -1 # Value if material not found on object
-            if material_created:
-                for i, ms in enumerate( o.material_slots ):
-                    if ms.material and ms.material.name == materials[ m ]:
-                        mi = i
-                        print( "\tFound material in slot %s" % str(mi) )
+            for i, ms in enumerate( o.material_slots ):
+                if ms.material and ms.material.name == mat_refs[ m ].name:
+                    mi = i
+                    print( "\tFound material in slot %s" % str(mi) )
 
             if mi == -1:
                 # Check if there's an empty slot
@@ -538,13 +527,19 @@ class insole_props( bpy.types.PropertyGroup ):
                     print( "\tAdding new slot", slot )
 
                 # Assign material to slot
-                slot.material = mat
+                slot.material = mat_refs[ m ]
                 for i, ms in enumerate( o.material_slots ):
-                    if ms.material and ms.material.name == materials[ m ]:
+                    if ms.material and ms.material.name == mat_refs[ m ].name:
                         mi = i
-                print( "\tSlot assigned with material %s is idx: %s" % ( mat.name, str(mi)) )
+                print( "\tSlot assigned with material %s is idx: %s" % ( mat_refs[ m ].name, str(mi)) )
                 
             self.select_area( context, m ) # Select current area's vertices
+            print( "\tattempted to select '%s' faces" % m )
+            print( 
+                "\tSelected faces: %s" % str(
+                    len([ p for p in o.data.polygons if p.select])
+                )
+            )
             bpy.ops.mesh.select_mode( type = 'FACE' ) # Go to face selection mode
             bpy.ops.object.mode_set( mode = 'OBJECT' ) # Go to object mode
 
