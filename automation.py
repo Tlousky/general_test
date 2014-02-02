@@ -297,7 +297,7 @@ class flatten_front( bpy.types.Operator ):
         bm = bmesh.from_edit_mesh( o.data )
 
         # Select flat area verts (as defined by flat area property)
-        props.select_area( context, 'flat' )
+        idx = props.select_area( context, 'flat' )
         
         # 5. Activate proportional editing tool.
         context.scene.tool_settings.proportional_edit = 'ENABLED'
@@ -401,7 +401,7 @@ class insole_props( bpy.types.PropertyGroup ):
         for v in obj.data.vertices:
             pt1 = v.co * obj.matrix_world # convert to global coordinates
             pt2 = point
-            distance = \ # Sum of absolute distances in XYZ
+            distance = \
                 abs(pt1.x - pt2.x) + abs(pt1.y - pt2.y) + abs(pt1.z - pt2.z)
 
             if distance < smallest_distance:
@@ -453,6 +453,8 @@ class insole_props( bpy.types.PropertyGroup ):
         else: # Select all unchanged ('orig') vertices
             for v in bm.verts:
                 if v.co.y < mid_y: v.select = True
+                
+        return idx
 
     def update_materials( self, context ):
         ''' Update visual preview of flattenning effect '''
