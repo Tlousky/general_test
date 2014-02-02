@@ -44,12 +44,12 @@ class insole_automation_tools( bpy.types.Panel ):
         col.operator( 
             'object.delete_loose',
             text = 'Perform Cleanup',
-            icon = 'AUTO'
+            icon = 'DRIVER'
         )
 
         col.operator( 
             'object.decimate_object',
-            text = 'Reduce to %s faces' % MAX_FACES,
+            text = 'Compress model',
             icon = 'MOD_DECIM'
         )
 
