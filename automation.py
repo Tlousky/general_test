@@ -43,8 +43,8 @@ class insole_automation_tools( bpy.types.Panel ):
 
         col.operator( 
             'object.delete_loose',
-            text = 'Delete loose verts',
-            icon = 'CANCEL'
+            text = 'Perform Cleanup',
+            icon = 'AUTO'
         )
 
         col.operator( 
@@ -52,8 +52,14 @@ class insole_automation_tools( bpy.types.Panel ):
             text = 'Reduce to %s faces' % MAX_FACES,
             icon = 'MOD_DECIM'
         )
-       
-        r = col.row()
+
+        # Orientation buttons box
+        b  = col.box()
+        bc = b.column()
+        l = bc.label( "Scan orientation buttons" )
+
+        r  = bc.row()        
+
         r.operator( 
             'object.orient_scan',
             text = 'Front',
@@ -71,12 +77,6 @@ class insole_automation_tools( bpy.types.Panel ):
             text = 'Top',
             icon = 'AXIS_TOP'
         ).view = 'TOP'
-        
-        col.operator( 
-            'object.smooth_verts',
-            text = 'Smooth object',
-            icon = 'MOD_SMOOTH'
-        )
         
         b = col.box()
         bc = b.column()
@@ -102,6 +102,12 @@ class insole_automation_tools( bpy.types.Panel ):
         
         bc.prop( context.scene.insole_properties, 'flat_area' )
         bc.prop( context.scene.insole_properties, 'falloff'   )
+        
+        col.operator( 
+            'object.smooth_verts',
+            text = 'Smooth object',
+            icon = 'MOD_SMOOTH'
+        )
 
 class delete_loose( bpy.types.Operator ):
     """ Delete vertices not-connected to selected one """
