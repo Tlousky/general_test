@@ -489,7 +489,7 @@ class insole_props( bpy.types.PropertyGroup ):
                 last_new_mat   = ''
                 data_materials = bpy.data.materials.keys()
                 for m in data_materials:
-                    if 'Material in m and m > last_new_mat: last_new_mat = m
+                    if 'Material' in m and m > last_new_mat: last_new_mat = m
 
                 mat               = bpy.data.materials[ last_new_mat ]
                 mat.name          = materials[ m ]
