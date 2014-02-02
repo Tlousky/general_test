@@ -416,14 +416,12 @@ class insole_props( bpy.types.PropertyGroup ):
             
         return closest_vert
 
-    def select_area( self, context, area_type = 'flat' ):
+    def select_area( self, context, area_type = 'flat', mat_idx = -1 ):
         ''' Select the flat area as defined by the % in the flat area property '''
 
         o     = context.object
         props = context.scene.insole_properties
 
-        print( "Select area called on area: %s" % area_type )
-        
         # 1. Go to edit mode and create bmesh object
         if o.mode != 'EDIT': bpy.ops.object.mode_set(mode = 'EDIT')
         bm = bmesh.from_edit_mesh( o.data )
@@ -447,8 +445,6 @@ class insole_props( bpy.types.PropertyGroup ):
         mid_y  = flat_y - mid_size
 
         
-        print( "FlatY: %s  midY: %s" % ( flat_y, mid_y ) )
-
         # Go to vertex selection mode and deselect all verts
         bpy.ops.mesh.select_mode( type   = 'VERT'     )
         bpy.ops.mesh.select_all(  action = 'DESELECT' )
@@ -471,8 +467,13 @@ class insole_props( bpy.types.PropertyGroup ):
                     v.select = True
                     orig_verts += 1
         
-        print( "selected flt: %s  mid: %s  org: %s" % ( flat_verts, mid_verts, orig_verts ) )
-                
+        # Paint verts if material slot index provided
+        if mat_idx != -1:
+            o.active_material_index = mat_idx
+            bpy.ops.object.mode_set(mode ='OBJECT')
+            bpy.ops.object.mode_set(mode ='EDIT')
+            bpy.ops.object.material_slot_assign()
+        
         return idx
 
     def update_materials( self, context ):
@@ -510,7 +511,6 @@ class insole_props( bpy.types.PropertyGroup ):
                 mat_refs[ m ] = mat # Create reference in dictionary
             else:
                 mat_refs[ m ] = bpy.data.materials[ materials[ m ] ]
-        
 
         bpy.ops.object.mode_set(mode ='OBJECT')
 
@@ -538,20 +538,10 @@ class insole_props( bpy.types.PropertyGroup ):
                     if ms.material and ms.material.name == mat_refs[ m ].name:
                         mi = i
                 
-            self.select_area( context, m ) # Select current area's vertices
-
-            bpy.ops.mesh.select_mode( type = 'FACE' ) # Go to face selection mode
-            bpy.ops.object.mode_set( mode = 'OBJECT' ) # Go to object mode
-
-            # Assign material to area's polygons
-            count = 0
-            for p in o.data.polygons:
-                if p.select: 
-                    p.material_index = mi
-                    count += 1
+            self.select_area( context, m, mi ) # Select current area's vertices
             
-            print( "\tAssigned slot %s to %s faces" % ( str(mi), count ) )
-            
+        bpy.ops.object.mode_set(mode ='OBJECT')
+
     flat_area = bpy.props.FloatProperty(
         description = "Percentage of scan to be flattened, from front to back",
         name        = "Flat Area",
