@@ -413,9 +413,16 @@ class create_and_fit_curve( bpy.types.Operator ):
         return context.object.type == 'MESH' and context.object.select
 
     def make_curve( self, context, name, cList, scan_obj ):  
-        curve = bpy.data.curves.new(name=name, type='CURVE')  
+        ''' Create curve from list of coordinates and adjust its dimensions
+            to fit those of provided object reference 'scan_obj'
+        '''
+
+        # Create reference by name to make obj reference persistent
+        scan_obj = context.scene.objects[ scan_obj.name ]
+
+        curve = bpy.data.curves.new( name = name, type='CURVE' )
         curve.dimensions = '3D'  
-      
+     
         o = bpy.data.objects.new(name, curve)
         o.location = (0,0,0) # place at object origin
         context.scene.objects.link( o )
@@ -435,41 +442,58 @@ class create_and_fit_curve( bpy.types.Operator ):
             p.handle_right      = cList[num]['rh']['co']
             p.handle_right_type = cList[num]['rh']['type']
             
-        # Equate the dimensions of the curve to the scanned insole object
-        o.dimensions = scan_obj.dimensions
-        
         return o
 
     def execute( self, context ):
         """ Create curve and fit it to foot scan """
-        o = context.scene.objects[ context.object.name ]
-
-        name = 'insole_curve.' + self.direction
+        o     = context.scene.objects[ context.object.name ]
+        props = context.scene.insole_properties
+        name  = 'insole_curve.' + self.direction
         
         # 1. create curve
         curve = self.make_curve( 
             context, name, right_foot_insole_curve_coordinates, o 
         ) 
 
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        curve.select = True                   # Select curve
+        context.scene.objects.active = curve  # Make it the active object
+   
+        # Equate the dimensions of the curve to the scanned insole object
+        curve.dimensions = ( o.dimensions.x, o.dimensions.y, 0 )
+
         # Curve is right foot by default. To get left foot, we must flip it.
         if self.direction == 'L':
-            bpy.ops.object.select_all( action = 'DESELECT' )
-            curve.select = True                   # Select curve
-            context.scene.objects.active = curve  # Make it the active object
             bpy.ops.transform.resize( value = (-1,1,1) ) # Flip in X axis
+
+        # Find heighest vertex and rearmost vertex on scan
+        heighest_vert = -1
+        heighest_z    = -10000
+        rearmost_vert = -1
+        smallest_y    = 10000
+
+        for v in o.data.vertices:
+            if v.co.z > heighest_z:
+                 heighest_z    = v.co.z
+                 heighest_vert = v.index
+            if v.co.y < smallest_y:
+                smallest_y    = v.co.y
+                rearmost_vert = v.index
+                 
+        # Make sure Z location is above scan object
+        curve.location.z = heighest_z + props.insole_thickness
         
-        '''
-        # 2. Find y length ratio between scan and curve
-        ratio = o.dimensions.y / curve.dimensions.y
-
-        # Select curve, and scale to fit y length
-        bpy.ops.transform.resize(value=(ratio,ratio,1))
-
-        # Push curve (translate) so that the rearmost point matches
-        # the scan's rear vertex.
-
-        '''
-
+        # Find rearmost point on curve
+        smallest_y_curve = 1000
+        for p in curve.data.splines[0].bezier_points:
+            if p.co.y < smallest_y:
+                smallest_y_curve = p.co.y
+        
+        diff = smallest_y - smallest_y_curve
+        
+        # Move curve on y axis so that rear points will match
+        bpy.ops.transform.translate( value = (0, diff, 0) )
+        
         return {'FINISHED'}
         
 class insole_props( bpy.types.PropertyGroup ):
@@ -636,6 +660,15 @@ class insole_props( bpy.types.PropertyGroup ):
         min         = 0.0,
         max         = 1.0,
         update      = update_materials
+    )
+    
+    insole_thickness = py.props.FloatProperty(
+        description = "Insole thickness",
+        name        = "Insole thickness",
+        subtype     = 'FACTOR',
+        default     = 30,
+        min         = 0.0,
+        max         = 100.0
     )
 
 right_foot_insole_curve_coordinates = [
