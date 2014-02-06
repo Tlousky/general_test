@@ -77,6 +77,13 @@ class insole_automation_tools( bpy.types.Panel ):
             text = 'Top',
             icon = 'AXIS_TOP'
         ).view = 'TOP'
+
+        # Center view on object
+        r.operator(
+            'view3d.view_selected',
+            text = 'All',
+            icon = 'ALIGN'
+        )
         
         b = col.box()
         bc = b.column()
@@ -217,31 +224,30 @@ class orient_scan( bpy.types.Operator ):
     def execute( self, context ):
         """ Orient from selected view """
         o = context.object
+
+        # Switch to requested angle (Front/Left/Top)
+        bpy.ops.view3d.viewnumpad( type = self.view )
         
+        # Find 3D_View window and its scren space
         for a in bpy.data.window_managers[0].windows[0].screen.areas:
             if a.type == 'VIEW_3D': 
                 area = a
                 break
 
         space = area.spaces[0]
-                
+
+        # Switch to orthographic mode if not already in it
+        if space.region_3d.view_perspective != 'ORTHO':
+            bpy.ops.view3d.view_persportho()
+        
         # Make sure 3D manipulator is displayed
         if not space.show_manipulator:
             space.show_manipulator = True
 
         # Display rotation manipulator
-        space.transform_manipulators = {'ROTATE'}
+        if not space.transform_manipulators == {'ROTATE'}:
+            space.transform_manipulators = {'ROTATE'}
             
-        # Switch to orthographic mode if not already in it
-        if space.region_3d.view_perspective != 'ORTHO':
-            bpy.ops.view3d.view_persportho()
-
-        
-        bpy.ops.view3d.viewnumpad( type = self.view )
-        
-        # Center view on object
-        bpy.ops.view3d.view_selected()
-        
         return {'FINISHED'}
             
 class smooth_verts( bpy.types.Operator ):
@@ -468,6 +474,7 @@ class insole_props( bpy.types.PropertyGroup ):
                     orig_verts += 1
         
         # Paint verts if material slot index provided
+        # TODO: move this back to update_materials
         if mat_idx != -1:
             o.active_material_index = mat_idx
             bpy.ops.object.mode_set(mode ='OBJECT')
