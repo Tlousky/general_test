@@ -132,7 +132,16 @@ class insole_automation_tools( bpy.types.Panel ):
             text = 'Left foot',
             icon = 'TRIA_LEFT'
         ).direction = 'L'
-        
+
+        b  = col.box()
+        bc = b.column()
+        l  = bc.label( "Create Insole" )
+        bc.prop( context.scene.insole_properties, 'insole_thickness' )
+        bc.operator( 
+            'object.create_insole',
+            text = 'Create Insole',
+            icon = 'MESH_DATA'
+        )
         
 class delete_loose( bpy.types.Operator ):
     """ Delete vertices not-connected to selected one """
@@ -536,17 +545,21 @@ class create_and_fit_curve( bpy.types.Operator ):
         # Go to object mode
         bpy.ops.object.mode_set(mode = 'OBJECT')            
 
-        # Select curve
+        # Parent all empties to curve
+        bpy.ops.object.select_all( action = 'DESELECT' ) # deselect all
+        for h in hooks: 
+            context.scene.objects[ h ].select = True
+        o.select = True
+            
+        bpy.ops.object.parent_set( type = 'OBJECT', keep_transform = True )
+
         bpy.ops.object.select_all( action = 'DESELECT' ) # deselect all
         o.select = True
-        
-        # Parent all empties to curve
-        for h in hooks: context.scene.objects[ h ].parent = curve
-        
+
         # Set manipulator to transform
         space = self.find_window_space( context )
-        if not space.transform_manipulators == {'TRANSLATE'}:
-            space.transform_manipulators = {'TRANSLATE'}
+        if not space.transform_manipulators == {'ROTATE'}:
+            space.transform_manipulators = {'ROTATE'}
             
     def execute( self, context ):
         """ Create curve and fit it to foot scan """
@@ -613,6 +626,76 @@ class create_and_fit_curve( bpy.types.Operator ):
         # Create hooks on each of the curve's points
         self.create_hooks( context, curve )
         
+        return {'FINISHED'}
+
+class create_insole_from_curve( bpy.types.Operator ):
+    """ Create mesh insole object from curve and scan """
+    bl_idname      = "object.create_insole"
+    bl_label       = "Create Insole"
+    bl_description = "Create Insole from Scan and Outline"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with selected MESH type objects '''
+        return context.object.type == 'MESH' and context.object.select
+
+    def execute( self, context ):
+        props = context.scene.insole_properties
+        scn   = context.scene
+        cname = [ o.name for o in scn.objects if 'insole_curve' in o.name ].pop()
+        c     = context.scene.objects[ cname ] # Create reference by object name
+
+        # Select curve object and set it as active
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        c.select = True        # Select curve
+        scn.objects.active = c # Set curve as active object
+
+        # Apply modifiers on curve        
+        for m in c.modifiers: bpy.ops.object.modifier_apply( modifier = m.name )
+
+        # Delete all type = 'EMPTY' objects
+        for e in [ e for e in scn.objects if e.type == 'EMPTY' ]:
+            bpy.ops.object.select_all( action = 'DESELECT' )
+            e.select = True        # Select empty
+        bpy.ops.object.delete()    # Delete selected objects
+
+        # Select curve object and set it as active
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        c.select = True        # Select curve
+        scn.objects.active = c # Set curve as active object
+
+        # Reference scan object
+        scan = [ o for o in scn.objects if o.type == 'MESH' ].pop()
+        
+        # Convert curve to mesh
+        bpy.ops.object.convert( target = 'MESH' )
+
+        # Go to edit mode, vertex selection mode and select all verts 
+        bpy.ops.object.mode_set( mode   = 'EDIT'   )
+        bpy.ops.mesh.select_mode( type  = 'VERT'   )
+        bpy.ops.mesh.select_all( action = 'SELECT' )
+        
+        # Perform grid fill
+        bpy.ops.mesh.fill_grid()
+
+        # Extrude down on z to bottom of scan + insole_thickness
+        coos   = [ c.co * scan.matrix_world for c in scan.data.vertices ]
+        z_coos = [ c.z for c in coos ]
+        z_coos.sort()
+        lowest_z  = z_coos[0]
+        extrude_z = lowest_z - props.insole_thickness
+        
+        bpy.ops.mesh.extrude_region_move( 
+            TRANSFORM_OT_translate={"value":(0, 0, extrude_z )} 
+        )
+        
+        # Go to object mode
+        bpy.ops.object.mode_set( mode = 'OBJECT' )
+        
+        # Create boolean modifier with correct settings
+        # Apply boolean modifier and delete (or hide) other object
+
         return {'FINISHED'}
         
 class insole_props( bpy.types.PropertyGroup ):
@@ -785,102 +868,54 @@ class insole_props( bpy.types.PropertyGroup ):
         description = "Insole thickness",
         name        = "Insole thickness",
         subtype     = 'FACTOR',
-        default     = 30,
+        default     = 10,
         min         = 0.0,
         max         = 100.0
     )
 
 right_foot_insole_curve_coordinates = [
   {
-    "point": [
-      -0.6314261555671692, 
-      -0.3624125123023987, 
-      -4.673041398284283e-10
-    ], 
+    "point": [ -0.6314261555671692, -0.3624125123023987, 0 ], 
     "lh": {
-      "co": [
-        -0.3986741602420807, 
-        -1.1438326835632324, 
-        -6.253572104597538e-10
-      ], 
-      "type": "ALIGNED"
+      "co"   : [ -0.3986741602420807, -1.1438326835632324, 0 ], 
+      "type" : "ALIGNED"
     }, 
     "rh": {
-      "co": [
-        -1.147887945175171, 
-        1.3715088367462158, 
-        -1.165944840675337e-10
-      ], 
-      "type": "ALIGNED"
+      "co"   : [ -1.147887945175171, 1.3715088367462158, 0 ],
+      "type" : "ALIGNED"
     }
   }, 
   {
-    "point": [
-      -0.31932520866394043, 
-      2.391295909881592, 
-      -8.734858392145384e-10
-    ], 
+    "point": [ -0.31932520866394043, 2.391295909881592, 0 ], 
     "lh": {
-      "co": [
-        -1.2208094596862793, 
-        2.3732688426971436, 
-        -1.169804919598505e-09
-      ], 
-      "type": "ALIGNED"
+      "co"   : [ -1.2208094596862793, 2.3732688426971436, 0 ], 
+      "type" : "ALIGNED"
     }, 
     "rh": {
-      "co": [
-        0.6398943662643433, 
-        2.41047739982605, 
-        -5.581890505368392e-10
-      ], 
-      "type": "ALIGNED"
+      "co"   : [ 0.6398943662643433, 2.41047739982605, 0 ], 
+      "type" : "ALIGNED"
     }
   }, 
   {
-    "point": [
-      0.8148716688156128, 
-      -0.5427557229995728, 
-      9.881843121561928e-10
-    ], 
+    "point": [ 0.8148716688156128, -0.5427557229995728, 0 ], 
     "lh": {
-      "co": [
-        1.027264952659607, 
-        0.9133864641189575, 
-        6.970223287439126e-10
-      ], 
-      "type": "FREE"
+      "co"   : [ 1.027264952659607, 0.9133864641189575, 0 ], 
+      "type" : "FREE"
     }, 
     "rh": {
-      "co": [
-        0.6966830492019653, 
-        -1.7818933725357056, 
-        9.881843121561928e-10
-      ], 
-      "type": "FREE"
+      "co"   : [ 0.6966830492019653, -1.7818933725357056, 0 ], 
+      "type" : "FREE"
     }
   }, 
   {
-    "point": [
-      -0.15875260531902313, 
-      -2.6983823776245117, 
-      1.64697394611224e-10
-    ], 
+    "point": [ -0.15875260531902313, -2.6983823776245117, 0 ], 
     "lh": {
-      "co": [
-        0.8510141968727112, 
-        -2.9746973514556885, 
-        4.517951346372229e-09
-      ], 
-      "type": "ALIGNED"
+      "co"   : [ 0.8510141968727112, -2.9746973514556885, 0 ], 
+      "type" : "ALIGNED"
     }, 
     "rh": {
-      "co": [
-        -0.7176949977874756, 
-        -2.5454320907592773, 
-        -2.2449857528528128e-09
-      ], 
-      "type": "ALIGNED"
+      "co"   : [ -0.7176949977874756, -2.5454320907592773, 0 ], 
+      "type" : "ALIGNED"
     }
   }
 ]
