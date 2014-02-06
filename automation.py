@@ -466,34 +466,74 @@ class create_and_fit_curve( bpy.types.Operator ):
         if self.direction == 'L':
             bpy.ops.transform.resize( value = (-1,1,1) ) # Flip in X axis
 
-        # Find heighest vertex and rearmost vertex on scan
-        heighest_vert = -1
-        heighest_z    = -10000
-        rearmost_vert = -1
-        smallest_y    = 10000
+        # Apply transformations on curve and scan
+        for obj in o, curve:
+            bpy.ops.object.select_all( action = 'DESELECT' ) # deselect all
+            obj.select = True                   # Select object
+            context.scene.objects.active = obj  # Make it the active object
 
-        for v in o.data.vertices:
-            if v.co.z > heighest_z:
-                 heighest_z    = v.co.z
-                 heighest_vert = v.index
-            if v.co.y < smallest_y:
-                smallest_y    = v.co.y
-                rearmost_vert = v.index
+            # Apply transformations
+            bpy.ops.object.transform_apply( 
+                location = True, 
+                rotation = True, 
+                scale    = True 
+            )
+            
+        # Find heighest vertex and rearmost vertex on scan
+        scan_coos = [ v.co * o.matrix_world for v in o.data.vertices ]
+        scan_zs = [ c.z for c in scan_coos ]
+        scan_ys = [ c.y for c in scan_coos ]
+        scan_zs.sort()
+        scan_ys.sort()
+        
+        smallest_y = scan_ys[0]
+        heighest_z = scan_zs[-1]
                  
         # Make sure Z location is above scan object
         curve.location.z = heighest_z + props.insole_thickness
         
         # Find rearmost point on curve
-        smallest_y_curve = 1000
+        smallest_y_curve = 10000
         for p in curve.data.splines[0].bezier_points:
-            if p.co.y < smallest_y:
-                smallest_y_curve = p.co.y
+            global_co = p.co * curve.matrix_world
+            if global_co.y < smallest_y:
+                smallest_y_curve = global_co.y
         
         diff = smallest_y - smallest_y_curve
-        
+       
         # Move curve on y axis so that rear points will match
         bpy.ops.transform.translate( value = (0, diff, 0) )
+
+        print( 
+            "obj-rearY: %s, curve_rearY: %s, diff: %s" % ( 
+                str(smallest_y), str(smallest_y_curve), str(diff) 
+            ) 
+        )
+
+        # Go to top view and activate rotation manipulator
+        # Switch to requested angle (Front/Left/Top)
+        bpy.ops.view3d.viewnumpad( type = 'TOP' )
         
+        # Find 3D_View window and its scren space
+        for a in bpy.data.window_managers[0].windows[0].screen.areas:
+            if a.type == 'VIEW_3D': 
+                area = a
+                break
+
+        space = area.spaces[0]
+
+        # Switch to orthographic mode if not already in it
+        if space.region_3d.view_perspective != 'ORTHO':
+            bpy.ops.view3d.view_persportho()
+        
+        # Make sure 3D manipulator is displayed
+        if not space.show_manipulator:
+            space.show_manipulator = True
+
+        # Display rotation manipulator
+        if not space.transform_manipulators == {'ROTATE'}:
+            space.transform_manipulators = {'ROTATE'}
+            
         return {'FINISHED'}
         
 class insole_props( bpy.types.PropertyGroup ):
@@ -662,7 +702,7 @@ class insole_props( bpy.types.PropertyGroup ):
         update      = update_materials
     )
     
-    insole_thickness = py.props.FloatProperty(
+    insole_thickness = bpy.props.FloatProperty(
         description = "Insole thickness",
         name        = "Insole thickness",
         subtype     = 'FACTOR',
