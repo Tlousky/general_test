@@ -116,18 +116,21 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'MOD_SMOOTH'
         )
 
-        r = col.row()
+        b  = col.box()
+        bc = b.column()
+        l  = bc.label( "Add outline curve" )
+        r  = bc.row()
         
         r.operator( 
             'object.create_and_fit_curve',
-            text = 'Smooth object',
-            icon = 'MOD_SMOOTH'
+            text = 'Right foot',
+            icon = 'TRIA_RIGHT'
         ).direction = 'R'
 
         r.operator( 
             'object.create_and_fit_curve',
-            text = 'Smooth object',
-            icon = 'MOD_SMOOTH'
+            text = 'Left foot',
+            icon = 'TRIA_LEFT'
         ).direction = 'L'
         
         
@@ -449,7 +452,7 @@ class create_and_fit_curve( bpy.types.Operator ):
         ) 
 
         # Curve is right foot by default. To get left foot, we must flip it.
-        if self.direction = 'L':
+        if self.direction == 'L':
             bpy.ops.object.select_all( action = 'DESELECT' )
             curve.select = True                   # Select curve
             context.scene.objects.active = curve  # Make it the active object
@@ -466,6 +469,8 @@ class create_and_fit_curve( bpy.types.Operator ):
         # the scan's rear vertex.
 
         '''
+
+        return {'FINISHED'}
         
 class insole_props( bpy.types.PropertyGroup ):
     def find_nearest_vert( self, obj, point):
