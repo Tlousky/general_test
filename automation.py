@@ -703,8 +703,8 @@ class create_insole_from_curve( bpy.types.Operator ):
             bpy.ops.object.mode_set( mode = 'OBJECT' )
             
             bpy.ops.object.select_all( action = 'DESELECT' )
-            obj.select = True        # Select obj
-            scn.objects.active = obj # Set scan as active object
+            obj.select         = True # Select obj
+            scn.objects.active = obj  # Set scan as active object
 
             # Go to edit mode, vertex selection mode and select all verts
             bpy.ops.object.mode_set( mode   = 'EDIT'   )
@@ -716,15 +716,6 @@ class create_insole_from_curve( bpy.types.Operator ):
         # Go to object mode
         bpy.ops.object.mode_set( mode = 'OBJECT' )
         
-        # Create boolean modifier with correct settings
-        bpy.ops.object.select_all( action = 'DESELECT' )
-        scan.select = True        # Select scan
-        scn.objects.active = scan # Set scan as active object
-        
-        m = scan.modifiers.new( 'insole_boolean', 'BOOLEAN' )
-        m.operation = 'INTERSECT'
-        m.object    = c
-
         # Create boolean modifier on curve
         bpy.ops.object.select_all( action = 'DESELECT' )
         c.select = True        # Select scan
@@ -735,15 +726,14 @@ class create_insole_from_curve( bpy.types.Operator ):
         m.object    = scan
 
         # Apply boolean modifier and delete (or hide) other object
-        # bpy.ops.object.modifier_apply( modifier = 'insole_boolean' )
+        bpy.ops.object.modifier_apply( modifier = 'insole_boolean' )
         
         # Delete now useless converted curve
-        '''
         bpy.ops.object.select_all( action = 'DESELECT' )
-        c.select = True        # Select curve
-        scn.objects.active = c # Set curve as active object
+        scan.select = True        # Select curve
+        scn.objects.active = scan # Set curve as active object
         bpy.ops.object.delete()
-        '''
+
         return {'FINISHED'}
         
 class insole_props( bpy.types.PropertyGroup ):
