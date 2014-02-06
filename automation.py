@@ -536,6 +536,10 @@ class create_and_fit_curve( bpy.types.Operator ):
         # Go to object mode
         bpy.ops.object.mode_set(mode = 'OBJECT')            
 
+        # Select curve
+        bpy.ops.object.select_all( action = 'DESELECT' ) # deselect all
+        o.select = True
+        
         # Parent all empties to curve
         for h in hooks: context.scene.objects[ h ].parent = curve
         
