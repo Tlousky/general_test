@@ -116,6 +116,21 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'MOD_SMOOTH'
         )
 
+        r = col.row()
+        
+        r.operator( 
+            'object.create_and_fit_curve',
+            text = 'Smooth object',
+            icon = 'MOD_SMOOTH'
+        ).direction = 'R'
+
+        r.operator( 
+            'object.create_and_fit_curve',
+            text = 'Smooth object',
+            icon = 'MOD_SMOOTH'
+        ).direction = 'L'
+        
+        
 class delete_loose( bpy.types.Operator ):
     """ Delete vertices not-connected to selected one """
     bl_idname      = "object.delete_loose"
@@ -377,32 +392,81 @@ class preview_flatten( bpy.types.Operator ):
         context.scene.insole_properties.update_materials( context )
         return {'FINISHED'}
 
-class import_and_fit_curve( bpy.types.Operator ):
-    """ *** TODO: FIX bl constants *** """
-    bl_idname      = "object.import_and_fit_curve" 
-    bl_label       = ""
-    bl_description = ""
+class create_and_fit_curve( bpy.types.Operator ):
+    """ Creates a curve outline of the final insole shape, and adds some easy
+        adjust hooks to fix the shape and fine-tune it
+    """
+
+    bl_idname      = "object.create_and_fit_curve" 
+    bl_label       = "Create insole outline"
+    bl_description = "Create an outline curve"
     bl_options     = {'REGISTER', 'UNDO'}
 
+    direction = bpy.props.StringProperty()
+    
     @classmethod
     def poll( self, context ):
         ''' Only works with MESH type objects '''
         return context.object.type == 'MESH' and context.object.select
 
-    def execute( self, context ):
-        """ Smooths vertices on object """
-        o = context.object        
+    def make_curve( self, context, name, cList, scan_obj ):  
+        curve = bpy.data.curves.new(name=name, type='CURVE')  
+        curve.dimensions = '3D'  
+      
+        o = bpy.data.objects.new(name, curve)
+        o.location = (0,0,0) # place at object origin
+        context.scene.objects.link( o )
+      
+        polyline = curve.splines.new('BEZIER')  
+        polyline.bezier_points.add(len(cList)-1)
+        polyline.use_cyclic_u = True
+
+        for num in range(len(cList)):  
+            # Set point coordinates
+            polyline.bezier_points[num].co = cList[num]['point']
+
+            # Set handles
+            p = polyline.bezier_points[num]
+            p.handle_left       = cList[num]['lh']['co']
+            p.handle_left_type  = cList[num]['lh']['type']
+            p.handle_right      = cList[num]['rh']['co']
+            p.handle_right_type = cList[num]['rh']['type']
+            
+        # Equate the dimensions of the curve to the scanned insole object
+        o.dimensions = scan_obj.dimensions
         
-        # 1. import curve
+        return o
+
+    def execute( self, context ):
+        """ Create curve and fit it to foot scan """
+        o = context.scene.objects[ context.object.name ]
+
+        name = 'insole_curve.' + self.direction
+        
+        # 1. create curve
+        curve = self.make_curve( 
+            context, name, right_foot_insole_curve_coordinates, o 
+        ) 
+
+        # Curve is right foot by default. To get left foot, we must flip it.
+        if self.direction = 'L':
+            bpy.ops.object.select_all( action = 'DESELECT' )
+            curve.select = True                   # Select curve
+            context.scene.objects.active = curve  # Make it the active object
+            bpy.ops.transform.resize( value = (-1,1,1) ) # Flip in X axis
+        
+        '''
         # 2. Find y length ratio between scan and curve
-        ratio = scan.dimensions.y / curve.dimensions.y
+        ratio = o.dimensions.y / curve.dimensions.y
 
         # Select curve, and scale to fit y length
         bpy.ops.transform.resize(value=(ratio,ratio,1))
-        
+
         # Push curve (translate) so that the rearmost point matches
         # the scan's rear vertex.
 
+        '''
+        
 class insole_props( bpy.types.PropertyGroup ):
     def find_nearest_vert( self, obj, point):
         """ Find the closest vert on the mesh to provided point """
@@ -568,7 +632,102 @@ class insole_props( bpy.types.PropertyGroup ):
         max         = 1.0,
         update      = update_materials
     )
-        
+
+right_foot_insole_curve_coordinates = [
+  {
+    "point": [
+      -0.6314261555671692, 
+      -0.3624125123023987, 
+      -4.673041398284283e-10
+    ], 
+    "lh": {
+      "co": [
+        -0.3986741602420807, 
+        -1.1438326835632324, 
+        -6.253572104597538e-10
+      ], 
+      "type": "ALIGNED"
+    }, 
+    "rh": {
+      "co": [
+        -1.147887945175171, 
+        1.3715088367462158, 
+        -1.165944840675337e-10
+      ], 
+      "type": "ALIGNED"
+    }
+  }, 
+  {
+    "point": [
+      -0.31932520866394043, 
+      2.391295909881592, 
+      -8.734858392145384e-10
+    ], 
+    "lh": {
+      "co": [
+        -1.2208094596862793, 
+        2.3732688426971436, 
+        -1.169804919598505e-09
+      ], 
+      "type": "ALIGNED"
+    }, 
+    "rh": {
+      "co": [
+        0.6398943662643433, 
+        2.41047739982605, 
+        -5.581890505368392e-10
+      ], 
+      "type": "ALIGNED"
+    }
+  }, 
+  {
+    "point": [
+      0.8148716688156128, 
+      -0.5427557229995728, 
+      9.881843121561928e-10
+    ], 
+    "lh": {
+      "co": [
+        1.027264952659607, 
+        0.9133864641189575, 
+        6.970223287439126e-10
+      ], 
+      "type": "FREE"
+    }, 
+    "rh": {
+      "co": [
+        0.6966830492019653, 
+        -1.7818933725357056, 
+        9.881843121561928e-10
+      ], 
+      "type": "FREE"
+    }
+  }, 
+  {
+    "point": [
+      -0.15875260531902313, 
+      -2.6983823776245117, 
+      1.64697394611224e-10
+    ], 
+    "lh": {
+      "co": [
+        0.8510141968727112, 
+        -2.9746973514556885, 
+        4.517951346372229e-09
+      ], 
+      "type": "ALIGNED"
+    }, 
+    "rh": {
+      "co": [
+        -0.7176949977874756, 
+        -2.5454320907592773, 
+        -2.2449857528528128e-09
+      ], 
+      "type": "ALIGNED"
+    }
+  }
+]
+    
 def register():
     bpy.utils.register_module(__name__)
     bpy.types.Scene.insole_properties = bpy.props.PointerProperty( 

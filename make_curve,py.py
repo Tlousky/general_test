@@ -99,22 +99,19 @@ coos = [
 
 name = 'insole_curve.L'
   
-def MakePolyLine(objname, curvename, cList):  
-    curvedata = bpy.data.curves.new(name=curvename, type='CURVE')  
-    curvedata.dimensions = '3D'  
+def make_curve( name, cList, scan_obj ):  
+    curve = bpy.data.curves.new(name=name, type='CURVE')  
+    curve.dimensions = '3D'  
   
-    objectdata = bpy.data.objects.new(objname, curvedata)  
-    objectdata.location = (0,0,0) #object origin  
-    bpy.context.scene.objects.link(objectdata)  
+    o = bpy.data.objects.new(name, curve)
+    o.location = (0,0,0) # place at object origin
+    bpy.context.scene.objects.link( o )
   
-    polyline = curvedata.splines.new('BEZIER')  
+    polyline = curve.splines.new('BEZIER')  
     polyline.bezier_points.add(len(cList)-1)
     polyline.use_cyclic_u = True
 
     for num in range(len(cList)):  
-        # x, y, z = cList[num]['point']
-        # polyline.bezier_points[num].co = (x, y, z)
-
         # Set point coordinates
         polyline.bezier_points[num].co = cList[num]['point']
 
@@ -125,12 +122,7 @@ def MakePolyLine(objname, curvename, cList):
         p.handle_right      = cList[num]['rh']['co']
         p.handle_right_type = cList[num]['rh']['type']
         
-    '''
-    bpy.context.scene.objects.active = objectdata
-    bpy.ops.object.mode_set(mode='EDIT', toggle=True)
-    bpy.ops.curve.select_all(action='SELECT')
-    bpy.ops.curve.handle_type_set(type='AUTOMATIC')
-    bpy.ops.object.mode_set(mode='OBJECT', toggle=True)
-    '''
-  
+    # Equate the dimensions of the curve to the scanned insole object
+    o.dimensions = scan_obj.dimensions
+
 MakePolyLine(name, name, coos)
