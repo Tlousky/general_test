@@ -485,6 +485,7 @@ class create_and_fit_curve( bpy.types.Operator ):
         o.select = True                   # Select curve
         context.scene.objects.active = o  # Make it the active object
 
+        hooks = []
         # Iterate over points on curve 
         for i in range( len( o.data.splines[0].bezier_points ) ):
             # Go to edit mode
@@ -511,6 +512,8 @@ class create_and_fit_curve( bpy.types.Operator ):
 
             empty = context.scene.objects[ empties[-1] ]
             empty.empty_draw_size = 10
+            
+            hooks.append( empties[-1] )
 
             # Select both empty (first), then curve
             bpy.ops.object.select_all( action = 'DESELECT' ) # deselect all
@@ -533,6 +536,9 @@ class create_and_fit_curve( bpy.types.Operator ):
         # Go to object mode
         bpy.ops.object.mode_set(mode = 'OBJECT')            
 
+        # Parent all empties to curve
+        for h in hooks: context.scene.objects[ h ].parent = curve
+        
         # Set manipulator to transform
         space = self.find_window_space( context )
         if not space.transform_manipulators == {'TRANSLATE'}:
