@@ -566,6 +566,13 @@ class create_and_fit_curve( bpy.types.Operator ):
         o     = context.scene.objects[ context.object.name ]
         props = context.scene.insole_properties
         name  = 'insole_curve.' + self.direction
+
+        # Delete all the object's materials
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        o.select = True
+        context.scene.objects.active = o
+        for i in range( len( o.material_slots ) ):
+            bpy.ops.object.material_slot_remove()
         
         # 1. create curve
         curve = self.make_curve( 
@@ -705,7 +712,13 @@ class create_insole_from_curve( bpy.types.Operator ):
 
         # Apply boolean modifier and delete (or hide) other object
         bpy.ops.object.modifier_apply( modifier = 'insole_boolean' )
-
+        
+        # Delete now useless converted curve
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        c.select = True        # Select curve
+        scn.objects.active = c # Set curve as active object
+        bpy.ops.object.delete()
+        
         return {'FINISHED'}
         
 class insole_props( bpy.types.PropertyGroup ):
