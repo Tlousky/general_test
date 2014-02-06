@@ -494,6 +494,8 @@ class create_and_fit_curve( bpy.types.Operator ):
             bpy.ops.curve.select_all( action = 'DESELECT' )
             p = o.data.splines[0].bezier_points[ i ]
             p.select_control_point = True
+            p.select_left_handle   = True
+            p.select_right_handle  = True
 
             # Snap cursor to selected point
             bpy.ops.view3d.snap_cursor_to_selected()
