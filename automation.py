@@ -697,6 +697,22 @@ class create_insole_from_curve( bpy.types.Operator ):
         bpy.ops.mesh.extrude_region_move( 
             TRANSFORM_OT_translate={"value":(0, 0, extrude_z )} 
         )
+
+        # Go to object mode
+        bpy.ops.object.mode_set( mode = 'OBJECT' )
+        
+        # Recalculate normals on both objects
+        for obj in c, scan:
+            bpy.ops.object.select_all( action = 'DESELECT' )
+            obj.select = True        # Select obj
+            scn.objects.active = obj # Set scan as active object
+
+            # Go to edit mode, vertex selection mode and select all verts
+            bpy.ops.object.mode_set( mode   = 'EDIT'   )
+            bpy.ops.mesh.select_mode( type  = 'VERT'   )
+            bpy.ops.mesh.select_all( action = 'SELECT' )
+            
+            bpy.ops.mesh.normals_make_consistent() # Recalculate normals
         
         # Go to object mode
         bpy.ops.object.mode_set( mode = 'OBJECT' )
@@ -707,7 +723,7 @@ class create_insole_from_curve( bpy.types.Operator ):
         scn.objects.active = scan # Set scan as active object
         
         m = scan.modifiers.new( 'insole_boolean', 'BOOLEAN' )
-        m.operation = 'INTERSECT'
+        m.operation = 'DIFFERENCE'
         m.object    = c
 
         # Apply boolean modifier and delete (or hide) other object
