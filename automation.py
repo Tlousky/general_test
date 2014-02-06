@@ -444,18 +444,23 @@ class create_and_fit_curve( bpy.types.Operator ):
             
         return o
 
-    def set_view( self, context ):
-        ''' Go to top view and activate rotation manipulator '''
-
-        # Switch to Top view
-        bpy.ops.view3d.viewnumpad( type = 'TOP' )
-        
+    def find_window_space( self, context ):
         # Find 3D_View window and its scren space
         for a in bpy.data.window_managers[0].windows[0].screen.areas:
             if a.type == 'VIEW_3D': 
                 area = a
                 break
         space = area.spaces[0]
+        
+        return space
+        
+    def set_view( self, context ):
+        ''' Go to top view and activate rotation manipulator '''
+
+        # Switch to Top view
+        bpy.ops.view3d.viewnumpad( type = 'TOP' )
+        
+        space = self.find_window_space( context )
 
         # Switch to orthographic mode if not already in it
         if space.region_3d.view_perspective != 'ORTHO':
@@ -498,8 +503,14 @@ class create_and_fit_curve( bpy.types.Operator ):
 
             # Create spherical empty and set a reasonable draw size
             bpy.ops.object.empty_add( type = 'SPHERE' )
-            empty = context.scene.objects [ context.object.name ]
-            context.object.data.empty_draw_size = 10
+
+            empties = [ 
+                e.name for e in context.scene.objects if 'Empty' in e.name 
+            ]
+            empties.sort()
+
+            empty = context.scene.objects[ empties[-1] ]
+            empty.empty_draw_size = 10
 
             # Select both empty (first), then curve
             bpy.ops.object.select_all( action = 'DESELECT' ) # deselect all
@@ -515,12 +526,13 @@ class create_and_fit_curve( bpy.types.Operator ):
             p = o.data.splines[0].bezier_points[ i ]
             p.select_control_point = True
             
-            bpy.ops.object.hook_add_selobj( use_bone = False )
+            bpy.ops.object.hook_add_selob()
 
         # Go to object mode
         bpy.ops.object.mode_set(mode = 'OBJECT')            
 
         # Set manipulator to transform
+        space = self.find_window_space( context )
         if not space.transform_manipulators == {'TRANSLATE'}:
             space.transform_manipulators = {'TRANSLATE'}
             
