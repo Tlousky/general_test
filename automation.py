@@ -645,18 +645,19 @@ class create_insole_from_curve( bpy.types.Operator ):
         scn   = context.scene
         cname = [ o.name for o in scn.objects if 'insole_curve' in o.name ].pop()
         c     = context.scene.objects[ cname ] # Create reference by object name
-
+        
         # Select curve object and set it as active
         bpy.ops.object.select_all( action = 'DESELECT' )
         c.select = True        # Select curve
         scn.objects.active = c # Set curve as active object
 
         # Apply modifiers on curve        
-        for m in c.modifiers: bpy.ops.object.modifier_apply( modifier = m.name )
+        for m in c.modifiers: 
+            bpy.ops.object.modifier_apply( modifier = m.name )
 
         # Delete all type = 'EMPTY' objects
+        bpy.ops.object.select_all( action = 'DESELECT' )
         for e in [ e for e in scn.objects if e.type == 'EMPTY' ]:
-            bpy.ops.object.select_all( action = 'DESELECT' )
             e.select = True        # Select empty
         bpy.ops.object.delete()    # Delete selected objects
 
@@ -684,7 +685,7 @@ class create_insole_from_curve( bpy.types.Operator ):
         z_coos = [ c.z for c in coos ]
         z_coos.sort()
         lowest_z  = z_coos[0]
-        extrude_z = lowest_z - props.insole_thickness
+        extrude_z = ( c.location.z - lowest_z + props.insole_thickness ) * -1
         
         bpy.ops.mesh.extrude_region_move( 
             TRANSFORM_OT_translate={"value":(0, 0, extrude_z )} 
