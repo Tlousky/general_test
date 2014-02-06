@@ -444,6 +444,86 @@ class create_and_fit_curve( bpy.types.Operator ):
             
         return o
 
+    def set_view( self, context ):
+        ''' Go to top view and activate rotation manipulator '''
+
+        # Switch to Top view
+        bpy.ops.view3d.viewnumpad( type = 'TOP' )
+        
+        # Find 3D_View window and its scren space
+        for a in bpy.data.window_managers[0].windows[0].screen.areas:
+            if a.type == 'VIEW_3D': 
+                area = a
+                break
+        space = area.spaces[0]
+
+        # Switch to orthographic mode if not already in it
+        if space.region_3d.view_perspective != 'ORTHO':
+            bpy.ops.view3d.view_persportho()
+        
+        # Make sure 3D manipulator is displayed
+        if not space.show_manipulator:
+            space.show_manipulator = True
+
+        # Display rotation manipulator
+        if not space.transform_manipulators == {'ROTATE'}:
+            space.transform_manipulators = {'ROTATE'}
+
+    def create_hooks( self, context, o ):
+        ''' Create a hook for each bezier point on curve '''
+
+        # Select by name to make reference persistent
+        o = context.scene.objects[ o.name ] 
+        
+        # Select curve
+        bpy.ops.object.select_all( action = 'DESELECT' ) # deselect all
+        o.select = True                   # Select curve
+        context.scene.objects.active = o  # Make it the active object
+
+        # Iterate over points on curve 
+        for i in range( len( o.data.splines[0].bezier_points ) ):
+            # Go to edit mode
+            if o.mode != 'EDIT': bpy.ops.object.mode_set(mode = 'EDIT')
+        
+            # Select point
+            bpy.ops.curve.select_all( action = 'DESELECT' )
+            p = o.data.splines[0].bezier_points[ i ]
+            p.select_control_point = True
+
+            # Snap cursor to selected point
+            bpy.ops.view3d.snap_cursor_to_selected()
+
+            # Go to object mode
+            bpy.ops.object.mode_set(mode = 'OBJECT')
+
+            # Create spherical empty and set a reasonable draw size
+            bpy.ops.object.empty_add( type = 'SPHERE' )
+            empty = context.scene.objects [ context.object.name ]
+            context.object.data.empty_draw_size = 10
+
+            # Select both empty (first), then curve
+            bpy.ops.object.select_all( action = 'DESELECT' ) # deselect all
+            empty.select = True
+            o.select     = True
+            context.scene.objects.active = o
+            
+            # Go to edit mode
+            bpy.ops.object.mode_set(mode = 'EDIT')
+            
+            # Create hook modifier for the selected point
+            bpy.ops.curve.select_all( action = 'DESELECT' )
+            p = o.data.splines[0].bezier_points[ i ]
+            p.select_control_point = True
+            
+            bpy.ops.object.hook_add_selobj( use_bone = False )
+
+        # Go to object mode
+        bpy.ops.object.mode_set(mode = 'OBJECT')            
+
+        # Set manipulator to transform
+        if not space.transform_manipulators == {'TRANSLATE'}:
+            space.transform_manipulators = {'TRANSLATE'}
+            
     def execute( self, context ):
         """ Create curve and fit it to foot scan """
         o     = context.scene.objects[ context.object.name ]
@@ -490,7 +570,7 @@ class create_and_fit_curve( bpy.types.Operator ):
         heighest_z = scan_zs[-1]
                  
         # Make sure Z location is above scan object
-        curve.location.z = heighest_z + props.insole_thickness
+        curve.location.z = heighest_z
         
         # Find rearmost point on curve
         smallest_y_curve = 10000
@@ -504,36 +584,11 @@ class create_and_fit_curve( bpy.types.Operator ):
         # Move curve on y axis so that rear points will match
         bpy.ops.transform.translate( value = (0, diff, 0) )
 
-        print( 
-            "obj-rearY: %s, curve_rearY: %s, diff: %s" % ( 
-                str(smallest_y), str(smallest_y_curve), str(diff) 
-            ) 
-        )
-
-        # Go to top view and activate rotation manipulator
-        # Switch to requested angle (Front/Left/Top)
-        bpy.ops.view3d.viewnumpad( type = 'TOP' )
+        self.set_view( context ) # Top view to adjust curve rotation
         
-        # Find 3D_View window and its scren space
-        for a in bpy.data.window_managers[0].windows[0].screen.areas:
-            if a.type == 'VIEW_3D': 
-                area = a
-                break
-
-        space = area.spaces[0]
-
-        # Switch to orthographic mode if not already in it
-        if space.region_3d.view_perspective != 'ORTHO':
-            bpy.ops.view3d.view_persportho()
+        # Create hooks on each of the curve's points
+        self.create_hooks( context, curve )
         
-        # Make sure 3D manipulator is displayed
-        if not space.show_manipulator:
-            space.show_manipulator = True
-
-        # Display rotation manipulator
-        if not space.transform_manipulators == {'ROTATE'}:
-            space.transform_manipulators = {'ROTATE'}
-            
         return {'FINISHED'}
         
 class insole_props( bpy.types.PropertyGroup ):
