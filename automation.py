@@ -695,7 +695,16 @@ class create_insole_from_curve( bpy.types.Operator ):
         bpy.ops.object.mode_set( mode = 'OBJECT' )
         
         # Create boolean modifier with correct settings
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        scan.select = True        # Select scan
+        scn.objects.active = scan # Set scan as active object
+        
+        m = scan.modifiers.new( 'insole_boolean', 'BOOLEAN' )
+        m.operation = 'INTERSECT'
+        m.object    = c
+
         # Apply boolean modifier and delete (or hide) other object
+        bpy.ops.object.modifier_apply( modifier = 'insole_boolean' )
 
         return {'FINISHED'}
         
