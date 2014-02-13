@@ -36,7 +36,7 @@ class insole_automation_tools( bpy.types.Panel ):
         col    = layout.column()
 
         col.operator( 
-            'import_mesh.stl',
+            'object.import_insole_stl',
             text = 'Import STL file',
             icon = 'IMPORT'
         )
@@ -120,18 +120,18 @@ class insole_automation_tools( bpy.types.Panel ):
         bc = b.column()
         l  = bc.label( "Add outline curve" )
         r  = bc.row()
-        
-        r.operator( 
-            'object.create_and_fit_curve',
-            text = 'Right foot',
-            icon = 'TRIA_RIGHT'
-        ).direction = 'R'
 
         r.operator( 
             'object.create_and_fit_curve',
             text = 'Left foot',
             icon = 'TRIA_LEFT'
         ).direction = 'L'
+        
+        r.operator( 
+            'object.create_and_fit_curve',
+            text = 'Right foot',
+            icon = 'TRIA_RIGHT'
+        ).direction = 'R'
 
         b  = col.box()
         bc = b.column()
@@ -142,6 +142,43 @@ class insole_automation_tools( bpy.types.Panel ):
             text = 'Create Insole',
             icon = 'MESH_DATA'
         )
+
+class import_insole_stl( bpy.types.Operator ):
+    """ Import insole STL file and perform preliminary cleanup and adjustments """
+    bl_idname      = "object.import_insole_stl"
+    bl_label       = "Import STL"
+    bl_description = "Import foot scan STL file and prepare preliminary mesh"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Always available '''
+        return True
+
+    def execute( self, context ):
+        """ Launch import STL command, then run preperations and adjust view """
+        props = context.scene.insole_properties
+
+        bpy.ops.import_mesh.stl() # Open file import dialog
+        
+        o = bpy.context.object
+        
+        # After import, the imported mesh becomes selected and active
+        # 1. Move origin to geometry
+        if o.mode != 'OBJECT': bpy.ops.object.mode_set(mode = 'OBJECT')
+        bpy.ops.object.origin_set( type = 'ORIGIN_GEOMETRY' )
+
+        # 2. Clear transformation
+        bpy.ops.object.location_clear()
+
+        # 3. Center view
+        bpy.ops.view3d.view_selected()
+
+        # 4. Launch cleanup operator
+        bpy.ops.object.delete_loose()    
+
+        return {'FINISHED'}
+
         
 class delete_loose( bpy.types.Operator ):
     """ Delete vertices not-connected to selected one """
@@ -329,6 +366,13 @@ class flatten_front( bpy.types.Operator ):
         o     = context.object        
         props = context.scene.insole_properties
         
+        # Apply transformations to avoid weird issues with operator
+        bpy.ops.object.transform_apply( 
+            location = True, 
+            rotation = True, 
+            scale    = True 
+        )
+
         # To perform flattenning:
 
         # 1. Go to edit mode and create bmesh object
