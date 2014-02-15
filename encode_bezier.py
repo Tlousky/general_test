@@ -27,3 +27,5 @@ def encode_bezier_curve( obj ):
     bpy.data.texts[ textblock ].write(  # Write curve data to text block
         json.dumps( points, indent = 2 )
     )
+    
+encode_bezier_curve( bpy.context.object )
