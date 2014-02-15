@@ -14,7 +14,7 @@ bl_info = {
 }
 
 import bpy, bmesh, json
-from mathutils import Color
+from mathutils    import Color
 
 # Constants
 MAX_FACES         = 10000
@@ -35,18 +35,21 @@ class insole_automation_tools( bpy.types.Panel ):
         layout = self.layout
         col    = layout.column()
 
+        # Import STL
         col.operator( 
             'object.import_insole_stl',
             text = 'Import STL file',
             icon = 'IMPORT'
         )
 
+        # Clean mesh
         col.operator( 
             'object.delete_loose',
             text = 'Perform Cleanup',
             icon = 'DRIVER'
         )
 
+        # Reduce polycount
         col.operator( 
             'object.decimate_object',
             text = 'Compress model',
@@ -84,7 +87,8 @@ class insole_automation_tools( bpy.types.Panel ):
             text = 'All',
             icon = 'ALIGN'
         )
-        
+
+        ## Flatten Front props and operators
         b = col.box()
         bc = b.column()
         
@@ -116,6 +120,7 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'MOD_SMOOTH'
         )
 
+        ## Create curves and Trim Insole
         b  = col.box()
         bc = b.column()
         l  = bc.label( "Add outline curve" )
@@ -133,14 +138,56 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'TRIA_RIGHT'
         ).direction = 'R'
 
+        bc.operator( 
+            'object.trim_insole',
+            text = 'Trim Insole',
+            icon = 'CURVE_DATA'
+        )
+
+        ## Heel fixing props and operators
         b  = col.box()
         bc = b.column()
-        l  = bc.label( "Create Insole" )
+        l  = bc.label( "Fix Heel and Finish Insole" )
+        r  = bc.row()
+
+        r.operator(
+            'object.fix_insole_heel',
+            text = 'Fix Heel',
+            icon = 'BRUSH_FLATTEN'
+        )
+
+        r.operator( 
+            'object.preview_heel',
+            text = 'Preview',
+            icon = 'PREVIEW_RANGE'
+        )        
+
+        r.operator(
+            'ed.undo',
+            text = 'Undo',
+            icon = 'BACK'
+        )
+
+        bc.prop( context.scene.insole_properties, 'heel_area' )
+        bc.prop( context.scene.insole_properties, 'heel_factor'  )
+
+        # Twist correction props and operators
+        col.operator( 
+            'object.create_twist_armature',
+            text = 'Create twist controls',
+            icon = 'MOD_SIMPLEDEFORM'
+        )        
+        
+        ## Final Insole creation params and operators
+        b  = col.box()
+        bc = b.column()
+
+        bc.label( "Create finished Insole" )
         bc.prop( context.scene.insole_properties, 'insole_thickness' )
         bc.operator( 
             'object.create_insole',
             text = 'Create Insole',
-            icon = 'MESH_DATA'
+            icon = 'PARTICLES'
         )
 
 class import_insole_stl( bpy.types.Operator ):
@@ -730,7 +777,10 @@ class fix_heel( bpy.types.Operator ):
     @classmethod
     def poll( self, context ):
         ''' Only works with selected MESH type objects '''
-        return context.object.type == 'MESH' and context.object.select
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
 
     def straighten_heel( self, context ):
         props = context.scene.insole_properties
@@ -743,42 +793,231 @@ class fix_heel( bpy.types.Operator ):
         # Find rearmost vert
         props.select_area( context, area_type = 'heel' )
 
+        bm.select_flush( True )
+        
+        # Find highest Y amongst selected vertices
+        highest_y = -10000
         for v in bm.verts:
-            if v.co.z < min_z:
-                min_z = v.co.z
-                idx2  = v.index
+            glob_v = v.co * o.matrix_world
+            if glob_v.y > highest_y: highest_y = glob_v.y
 
-        if idx2 == -1: return {'FAILED'}
+        '''
+        # Bisect above designated height
+        bpy.ops.mesh.bisect(
+            plane_co    = ( 0, highest_y, props.heel_top), 
+            plane_no    = ( 0, 0, -1 ),
+            clear_inner = True,
+            use_fill    = True
+        )
+        '''
         
-        # STRAIGHTEN HEEL
-        # 1. Set selection area
-        # 2. Select verts
-        # 3. set view angle
-        # 4. Choose bisect height
-        # 5. perform bisect
+        heel_verts = [ v.index for v in bm.verts if v.select ]
         
-    def cleanup_and_repair_heel( self, context ):
-        props = context.scene.insole_properties
-        o     = context.object
+        bpy.ops.mesh.select_all( action = 'DESELECT' ) # Deselect all vertices
 
-        # CLEANUP
-        # 1. Select non-manifold geometry
-        # 2. Deselect all verts outside selection area
-        # 3. Scale to 0 on Z axis to straighten edge (use small proportional editing)
-        # 4. Raise heel modreately with proportional editing to create elevation
+        # Select non manifold geometry (outline verts)
+        bpy.ops.mesh.select_non_manifold()
+
+        # Deselect all the verts outside the heel area
+        for v in bm.verts:
+            if v.select and v.index not in heel_verts:
+                v.select = False
+
+        bm.select_flush( True )
+
+        # Straighten in Z axis (Scale to 0 in Z)
+        bpy.ops.transform.resize( 
+            value             = ( 1, 1, 0), 
+            constraint_axis   = ( False, False, True ), 
+            proportional      = 'ENABLED', 
+            proportional_size = props.heel_factor
+        )
         
     def execute( self, context ):
         props = context.scene.insole_properties
         o     = context.object
 
-        
+        self.straighten_heel( context )
+
+        if o.mode != 'OBJECT': bpy.ops.object.mode_set(mode = 'OBJECT')
         
         return {'FINISHED'}
 
+class create_insole( bpy.types.Operator ):
+    """ Create mesh insole object from cleaned mesh """
+    bl_idname      = "object.create_insole"
+    bl_label       = "Create Insole"
+    bl_description = "Create Finished Insole from Cleaned Mesh"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with selected MESH type objects '''
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
+
+    def cleanup_and_repair_heel( self, context ):
+        props = context.scene.insole_properties
+        o     = context.object
+
+        # Go to edit mode, vertex selection mode and select all verts
+        bpy.ops.object.mode_set( mode   = 'EDIT'   )
+        bpy.ops.mesh.select_mode( type  = 'VERT'   )
+        bpy.ops.mesh.select_all( action = 'SELECT' )
+
+
+        # Extrude down on z to bottom of scan + insole_thickness
+        coos   = [ c.co * o.matrix_world for c in o.data.vertices ]
+        z_coos = [ c.z for c in coos ]
+        z_coos.sort()
+        lowest_z  = z_coos[0]
+        extrude_z = ( o.location.z - lowest_z + props.insole_thickness ) * -1
         
+        bpy.ops.mesh.extrude_region_move( 
+            TRANSFORM_OT_translate = { "value":(0, 0, extrude_z ) }
+        )
+
+        # Flatten extruded area
+        bpy.ops.transform.resize( 
+            value             = ( 1, 1, 0),
+            constraint_axis   = ( False, False, True )
+        )
+        
+        bpy.ops.mesh.normals_make_consistent() # Recalculate normals
+
+    def execute( self, context ):
+        ''' Preview the aread of the heel to be and the straightening line '''
+        o = context.object
+        
+        self.cleanup_and_repair_heel( context )
+
+        if o.mode != 'OBJECT': bpy.ops.object.mode_set(mode = 'OBJECT')
+
+        # Remove all the objects materials
+        context.scene.objects.active = o
+        for i in range( len( o.material_slots ) ):
+            bpy.ops.object.material_slot_remove()
+        
+        return {'FINISHED'}
+
+class preview_heel( bpy.types.Operator ):
+    """ Preview the heel area to be straightened """
+    bl_idname      = "object.preview_heel"
+    bl_label       = "Preview Heel Fix"
+    bl_description = "Preview Heel Fix"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with selected MESH type objects '''
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
+
+    def execute( self, context ):
+        ''' Preview the aread of the heel to be and the straightening line '''
+
+        context.scene.insole_properties.update_heel_materials( context )
+        
+        return {'FINISHED'}
+
+class create_twist_armature( bpy.types.Operator ):
+    """ Preview the heel area to be straightened """
+    bl_idname      = "object.create_twist_armature"
+    bl_label       = "Create twist controls"
+    bl_description = "Create twist controls"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with selected MESH type objects '''
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
+
+    def create_vertex_groups( self, context, scan, arm ):
+        ''' Create a vertex_group in the scan object for each
+            bone in the armature
+        '''
+        # Go to object mode
+        bpy.ops.object.mode_set(mode = 'OBJECT') 
+        
+        # Deselect all objects
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        
+        # Select and activate scan obj
+        scan.select = True
+        context.scene.objects.active = scan
+        
+        # Create a vgroup for each bone
+        for b in arm.data.bones:
+            bpy.ops.object.mode_set(mode = 'OBJECT')
+
+            # Check if the vertex group already exists
+            if b.name not in scan.vertex_groups.keys():
+                # Add vertex group
+                bpy.ops.object.vertex_group_add()
+                
+                # vgroup.name = bone.name
+                scan.vertex_groups[-1].name = b.name
+
+    def create_weight_maps( self, context, scan, arm ):
+        ''' Create the weight maps 
+        vertex.groups[0].group
+        vertex.groups[0].weight
+        '''
+
+
+    def execute( self, context ):
+        ''' Preview the aread of the heel to be and the straightening line '''
+
+        o = context.scene.objects[ context.object.name ]
+
+        # Find front and rear vertices on scan        
+        rear  = -1
+        front = -1
+        least = 10000
+        top   = -10000
+
+        for v in o.data.vertices:
+            if v.co.y > top:
+                top = v.co.y
+                front = v.index
+            if v.co.y < least:
+                least = v.co.y
+                rear = v.index
+
+        v_rear  = o.data.vertices[ rear  ].co
+        v_front = o.data.vertices[ front ].co
+
+        head = ( o.location.x, v_rear.y,  o.location.z )
+        tail = ( o.location.x, v_front.y, v_front.z    )
+
+        # Create armature
+        bpy.ops.object.armature_add( enter_editmode = True )
+        
+        a = context.scene.objects[ context.object.name ] # Armature
+        b = a.data.edit_bones[0]                         # Bone
+        
+        b.head = head
+        b.tail = tail
+        
+        b.select = True
+        
+        bpy.ops.armature.subdivide( number_cuts = 2 ) # Subdivide bone
+        
+        self.create_vertex_groups( context, o, a ) # Create vertex groups
+        
+        return {'FINISHED'}
+
+
 class create_insole_from_curve( bpy.types.Operator ):
     """ Create mesh insole object from curve and scan """
-    bl_idname      = "object.create_insole"
+    bl_idname      = "object.trim_insole"
     bl_label       = "Create Insole"
     bl_description = "Create Insole from Scan and Outline"
     bl_options     = {'REGISTER', 'UNDO'}
@@ -790,6 +1029,37 @@ class create_insole_from_curve( bpy.types.Operator ):
             return context.object.type == 'MESH' and context.object.select
         else:
             return False
+
+    def clear_bottom_verts( self, context, c ):
+        ''' Deletes the bottom vertices after boolean opearation '''
+        c.select                     = True
+        context.scene.objects.active = c
+        
+        if c.mode != 'EDIT': bpy.ops.object.mode_set( mode = 'EDIT' )
+
+        bpy.ops.mesh.select_all( action = 'DESELECT' )
+        bm = bmesh.from_edit_mesh( c.data ) # Create BMESH object
+        
+        lowest_z = 10000
+        lz_idx   = -1
+        
+        # Find lowest vert
+        for v in bm.verts:
+            if v.co.z < lowest_z:
+                lowest_z = v.co.z
+                lz_idx   = v.index
+                
+        # Select all the verts at the same height
+        for v in bm.verts:
+            if round( v.co.z, 2 ) == round( bm.verts[ lz_idx ].co.z, 2 ):
+                v.select = True
+                
+        bm.select_flush( True ) # Flush selected
+        
+        bpy.ops.mesh.delete()   # Delete dselected (bottom) verts
+
+        # Go to object mode
+        bpy.ops.object.mode_set( mode = 'OBJECT' )
 
     def execute( self, context ):
         props = context.scene.insole_properties
@@ -862,7 +1132,7 @@ class create_insole_from_curve( bpy.types.Operator ):
         
         # Create boolean modifier on curve
         bpy.ops.object.select_all( action = 'DESELECT' )
-        c.select = True        # Select scan
+        c.select = True        # Select curve
         scn.objects.active = c # Set scan as active object
         
         m = c.modifiers.new( 'insole_boolean', 'BOOLEAN' )
@@ -878,8 +1148,10 @@ class create_insole_from_curve( bpy.types.Operator ):
         scn.objects.active = scan # Set curve as active object
         bpy.ops.object.delete()
 
+        self.clear_bottom_verts( context, c ) # Clear bottom vertices
+
         return {'FINISHED'}
-        
+
 class insole_props( bpy.types.PropertyGroup ):
     def find_nearest_vert( self, obj, point):
         """ Find the closest vert on the mesh to provided point """
@@ -934,7 +1206,7 @@ class insole_props( bpy.types.PropertyGroup ):
 
         # Define heel selection area
         heel_size = o.dimensions.y * props.heel_area
-        heel_y    = bm.verts[idx2].co.y - heel_size
+        heel_y    = bm.verts[idx2].co.y + heel_size
         
         # Go to vertex selection mode and deselect all verts
         bpy.ops.mesh.select_mode( type   = 'VERT'     )
@@ -952,7 +1224,7 @@ class insole_props( bpy.types.PropertyGroup ):
                 if v.co.y < flat_y and v.co.y > mid_y: 
                     v.select = True
                     mid_verts += 1
-        elif area_type == 'heel':
+        elif 'heel' in area_type:
             for v in bm.verts:
                 if v.co.y < heel_y: 
                     v.select = True
@@ -962,7 +1234,10 @@ class insole_props( bpy.types.PropertyGroup ):
                 if v.co.y < mid_y: 
                     v.select = True
                     orig_verts += 1
-        
+
+        if area_type == 'non_heel':
+            bpy.ops.mesh.select_all( action = 'INVERT' )
+
         # Paint verts if material slot index provided
         # TODO: move this back to update_materials
         if mat_idx != -1:
@@ -970,11 +1245,72 @@ class insole_props( bpy.types.PropertyGroup ):
             bpy.ops.object.mode_set( mode = 'OBJECT' )
             bpy.ops.object.mode_set( mode = 'EDIT' )
             bpy.ops.object.material_slot_assign()
-        
+
         if area_type == 'heel':
             return idx2
         else:
             return idx
+
+    def create_materials( self, context, materials, colors ):
+        ''' Make sure provided materials exist in file data, and create 
+            them if they don't. Return references to material objects.
+        '''
+
+        o     = context.object
+        props = context.scene.insole_properties
+
+        mat_refs = {}
+        for m in materials:
+            if materials[ m ] not in bpy.data.materials.keys():
+                bpy.ops.material.new()
+
+                # Find last material
+                last_new_mat   = ''
+                for k in bpy.data.materials.keys():
+                    if 'Material' in k and k > last_new_mat: last_new_mat = k
+
+                mat               = bpy.data.materials[ last_new_mat ]
+                mat.name          = materials[ m ]
+                mat.diffuse_color = colors[ m ]
+                mat.use_shadeless = True
+                mat_refs[ m ] = mat # Create reference in dictionary
+            else:
+                mat_refs[ m ] = bpy.data.materials[ materials[ m ] ]
+        
+        return mat_refs
+
+    def assign_materials( self, context, mat_refs ):
+        ''' Assignes the materials specified in mat_refs to the relevant area '''
+
+        o     = context.object
+        props = context.scene.insole_properties
+
+        for m in mat_refs:
+            # Find current material's index in active object's material slots
+            mi = -1 # Value if material not found on object
+            for i, ms in enumerate( o.material_slots ):
+                if ms.material and ms.material.name == mat_refs[ m ].name:
+                    mi = i
+
+            if mi == -1:
+                # Check if there's an empty slot
+                slot = empty_slot = False
+                for ms in o.material_slots:
+                    if not ms.material:
+                        slot = empty_slot = ms
+                        break
+
+                if not empty_slot: # No empty slot? then add a slot
+                    bpy.ops.object.material_slot_add()
+                    slot = o.material_slots[-1]
+
+                # Assign material to slot
+                slot.material = mat_refs[ m ]
+                for i, ms in enumerate( o.material_slots ):
+                    if ms.material and ms.material.name == mat_refs[ m ].name:
+                        mi = i
+            
+            self.select_area( context, m, mi ) # Select current area's vertices
 
     def update_materials( self, context ):
         ''' Update visual preview of flattenning effect '''
@@ -993,57 +1329,36 @@ class insole_props( bpy.types.PropertyGroup ):
             'orig' : Color( ( 0.0, 0.0, 1.0 ) )  # Pure blue
         }
 
-        # First make sure all 3 materials exist in file data
-        mat_refs = {}
-        for m in materials:
-            if materials[ m ] not in bpy.data.materials.keys():
-                bpy.ops.material.new()
-
-                # Find last material
-                last_new_mat   = ''
-                for k in bpy.data.materials.keys():
-                    if 'Material' in k and k > last_new_mat: last_new_mat = k
-
-                mat               = bpy.data.materials[ last_new_mat ]
-                mat.name          = materials[ m ]
-                mat.diffuse_color = colors[ m ]
-                mat.use_shadeless = True
-                mat_refs[ m ] = mat # Create reference in dictionary
-            else:
-                mat_refs[ m ] = bpy.data.materials[ materials[ m ] ]
+        # Ensure materials exist in scene data or create them
+        mat_refs = self.create_materials( context, materials, colors )
 
         bpy.ops.object.mode_set(mode ='OBJECT')
 
-        for m in mat_refs:
-            # Find current material's index in active object's material slots
-            mi = -1 # Value if material not found on object
-            for i, ms in enumerate( o.material_slots ):
-                if ms.material and ms.material.name == mat_refs[ m ].name:
-                    mi = i
-            if mi == -1:
-                # Check if there's an empty slot
-                slot = empty_slot = False
-                for ms in o.material_slots:
-                    if not ms.material:
-                        slot = empty_slot = ms
-                        break
+        self.assign_materials( context, mat_refs )  # Assing materials
 
-                if not empty_slot: # No empty slot? then add a slot
-                    bpy.ops.object.material_slot_add()
-                    slot = o.material_slots[-1]
-
-                # Assign material to slot
-                slot.material = mat_refs[ m ]
-                for i, ms in enumerate( o.material_slots ):
-                    if ms.material and ms.material.name == mat_refs[ m ].name:
-                        mi = i
-                
-            self.select_area( context, m, mi ) # Select current area's vertices
-            
         bpy.ops.object.mode_set(mode ='OBJECT')
 
     def update_heel_materials( self, context ):
-        pass
+        o = context.object
+
+        materials = {
+            'heel'     : 'heel__insole.mat',
+            'non_heel' : 'non_heel_insole.mat'
+        }
+
+        colors = { 
+            'heel'     : Color( ( 1.0, 0.0, 0.0 ) ), # Pure red
+            'non_heel' : Color( ( 0.0, 0.0, 1.0 ) )  # Pure blue
+        }
+
+        # Ensure materials exist in scene data or create them
+        mat_refs = self.create_materials( context, materials, colors )
+
+        bpy.ops.object.mode_set(mode ='OBJECT')
+
+        self.assign_materials( context, mat_refs )  # Assing materials
+
+        bpy.ops.object.mode_set(mode ='OBJECT')
 
     flat_area = bpy.props.FloatProperty(
         description = "Percentage of scan to be flattened, from front to back",
@@ -1062,7 +1377,16 @@ class insole_props( bpy.types.PropertyGroup ):
         default     = 0.25,
         min         = 0.0,
         max         = 1.0,
-        update      = update_materials
+        update      = update_heel_materials
+    )
+
+    heel_factor = bpy.props.FloatProperty(
+        description = "Straightening factor for the top of the heel",
+        name        = "Heel Straightening Factor",
+        subtype     = 'DISTANCE',
+        default     = 4.0,
+        min         = 0.0,
+        max         = 100.0
     )
     
     falloff = bpy.props.FloatProperty(
@@ -1083,6 +1407,7 @@ class insole_props( bpy.types.PropertyGroup ):
         min         = 0.0,
         max         = 100.0
     )
+
 
 right_foot_insole_curve_coordinates = [
   {
