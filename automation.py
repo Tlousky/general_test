@@ -50,11 +50,14 @@ class insole_automation_tools( bpy.types.Panel ):
         )
 
         # Reduce polycount
-        col.operator( 
+        r = col.row()
+        r.operator( 
             'object.decimate_object',
             text = 'Compress model',
             icon = 'MOD_DECIM'
         )
+
+        r.prop( context.scene.insole_properties, 'decimate_faces' )
 
         # Orientation buttons box
         b  = col.box()
@@ -319,8 +322,9 @@ class decimate_object( bpy.types.Operator ):
         """ Reduces poly count by creating and applying a decimate modifier """
         ## Create decimate modifier and set its properties
         bpy.ops.object.modifier_add( type='DECIMATE' )
-        o = context.object
-
+        o     = context.object
+        props = context.scene.insole_properties
+        
         # Reference last modifier (the decimate mod we just created)
         decimate = o.modifiers[ len( o.modifiers ) - 1 ]
 
@@ -329,7 +333,7 @@ class decimate_object( bpy.types.Operator ):
             decimate.decimate_type = 'COLLAPSE'
         
         ## Calculate and apply ratio to set max face count
-        ratio = MAX_FACES / len(o.data.polygons)
+        ratio = props.decimate_faces / len(o.data.polygons)
         decimate.ratio = ratio
 
         ## Apply modifier
@@ -971,6 +975,12 @@ class create_twist_armature( bpy.types.Operator ):
         vertex.groups[0].weight
         '''
 
+        vertex_map = {}
+        
+        # for v in scan.data.vertices:
+            
+
+        pass
 
     def execute( self, context ):
         ''' Preview the aread of the heel to be and the straightening line '''
@@ -1359,6 +1369,14 @@ class insole_props( bpy.types.PropertyGroup ):
         self.assign_materials( context, mat_refs )  # Assing materials
 
         bpy.ops.object.mode_set(mode ='OBJECT')
+
+    decimate_faces = bpy.props.IntProperty(
+        description = "Number of faces to keep",
+        name        = "Resolution",
+        default     = 20000,
+        min         = 10000,
+        max         = 40000
+    )
 
     flat_area = bpy.props.FloatProperty(
         description = "Percentage of scan to be flattened, from front to back",
