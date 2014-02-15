@@ -13,7 +13,7 @@ bl_info = {
     "description" : "Insole preperation automation script"
 }
 
-import bpy, bmesh
+import bpy, bmesh, json
 from mathutils import Color
 
 # Constants
@@ -152,14 +152,13 @@ class import_insole_stl( bpy.types.Operator ):
 
     @classmethod
     def poll( self, context ):
-        ''' Always available '''
-        return True
+        return True # Always available
 
     def execute( self, context ):
         """ Launch import STL command, then run preperations and adjust view """
         props = context.scene.insole_properties
 
-        bpy.ops.import_mesh.stl() # Open file import dialog
+        # bpy.ops.import_mesh.stl( 'INVOKE_DEFAULT'  ) # Open file import dialog
         
         o = bpy.context.object
         
@@ -179,7 +178,28 @@ class import_insole_stl( bpy.types.Operator ):
 
         return {'FINISHED'}
 
+    def invoke( self, context, event ):
+        options = (
+            'INVOKE_DEFAULT', 
+            'INVOKE_REGION_WIN', 
+            'INVOKE_REGION_CHANNELS', 
+            'INVOKE_REGION_PREVIEW', 
+            'INVOKE_AREA', 
+            'INVOKE_SCREEN', 
+            'EXEC_DEFAULT', 
+            'EXEC_REGION_WIN', 
+            'EXEC_REGION_CHANNELS', 
+            'EXEC_REGION_PREVIEW', 
+            'EXEC_AREA', 
+            'EXEC_SCREEN'
+        )
+
+        bpy.ops.import_mesh.stl( 'INVOKE_DEFAULT'  ) # Open stl import dialog
         
+        # self.execute( context )
+        
+        return {'RUNNING_MODAL'}
+
 class delete_loose( bpy.types.Operator ):
     """ Delete vertices not-connected to selected one """
     bl_idname      = "object.delete_loose"
@@ -190,7 +210,10 @@ class delete_loose( bpy.types.Operator ):
     @classmethod
     def poll( self, context ):
         ''' Only works with MESH type objects '''
-        return context.object.type == 'MESH' and context.object.select
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
 
     def execute( self, context ):
         """ Deletes all the verts that aren't connected to the selected one """
@@ -240,7 +263,10 @@ class decimate_object( bpy.types.Operator ):
     @classmethod
     def poll( self, context ):
         ''' Only works with MESH type objects '''
-        return context.object.type == 'MESH' and context.object.select
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
 
     def execute( self, context ):
         """ Reduces poly count by creating and applying a decimate modifier """
@@ -283,7 +309,10 @@ class orient_scan( bpy.types.Operator ):
     @classmethod
     def poll( self, context ):
         ''' Only works with MESH type objects '''
-        return context.object.type == 'MESH' and context.object.select
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
 
     def execute( self, context ):
         """ Orient from selected view """
@@ -324,7 +353,10 @@ class smooth_verts( bpy.types.Operator ):
     @classmethod
     def poll( self, context ):
         ''' Only works with MESH type objects '''
-        return context.object.type == 'MESH' and context.object.select
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
 
     def execute( self, context ):
         """ Smooths vertices on object """
@@ -359,7 +391,10 @@ class flatten_front( bpy.types.Operator ):
     @classmethod
     def poll( self, context ):
         ''' Only works with MESH type objects '''
-        return context.object.type == 'MESH' and context.object.select
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
 
     def execute( self, context ):
         """ Smooths vertices on object """
@@ -442,7 +477,10 @@ class preview_flatten( bpy.types.Operator ):
     @classmethod
     def poll( self, context ):
         ''' Only works with selected MESH type objects '''
-        return context.object.type == 'MESH' and context.object.select
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
 
     def execute( self, context ):
         context.scene.insole_properties.update_materials( context )
@@ -463,7 +501,10 @@ class create_and_fit_curve( bpy.types.Operator ):
     @classmethod
     def poll( self, context ):
         ''' Only works with MESH type objects '''
-        return context.object.type == 'MESH' and context.object.select
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
 
     def make_curve( self, context, name, cList, scan_obj ):  
         ''' Create curve from list of coordinates and adjust its dimensions
@@ -679,6 +720,62 @@ class create_and_fit_curve( bpy.types.Operator ):
         
         return {'FINISHED'}
 
+class fix_heel( bpy.types.Operator ):
+    """ Create mesh insole object from curve and scan """
+    bl_idname      = "object.fix_insole_heel"
+    bl_label       = "Create Insole"
+    bl_description = "Create Insole from Scan and Outline"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with selected MESH type objects '''
+        return context.object.type == 'MESH' and context.object.select
+
+    def straighten_heel( self, context ):
+        props = context.scene.insole_properties
+        o     = context.object
+
+        # 1. Go to edit mode and create bmesh object
+        if o.mode != 'EDIT': bpy.ops.object.mode_set(mode = 'EDIT')
+        bm = bmesh.from_edit_mesh( o.data )
+        
+        # Find rearmost vert
+        props.select_area( context, area_type = 'heel' )
+
+        for v in bm.verts:
+            if v.co.z < min_z:
+                min_z = v.co.z
+                idx2  = v.index
+
+        if idx2 == -1: return {'FAILED'}
+        
+        # STRAIGHTEN HEEL
+        # 1. Set selection area
+        # 2. Select verts
+        # 3. set view angle
+        # 4. Choose bisect height
+        # 5. perform bisect
+        
+    def cleanup_and_repair_heel( self, context ):
+        props = context.scene.insole_properties
+        o     = context.object
+
+        # CLEANUP
+        # 1. Select non-manifold geometry
+        # 2. Deselect all verts outside selection area
+        # 3. Scale to 0 on Z axis to straighten edge (use small proportional editing)
+        # 4. Raise heel modreately with proportional editing to create elevation
+        
+    def execute( self, context ):
+        props = context.scene.insole_properties
+        o     = context.object
+
+        
+        
+        return {'FINISHED'}
+
+        
 class create_insole_from_curve( bpy.types.Operator ):
     """ Create mesh insole object from curve and scan """
     bl_idname      = "object.create_insole"
@@ -689,7 +786,10 @@ class create_insole_from_curve( bpy.types.Operator ):
     @classmethod
     def poll( self, context ):
         ''' Only works with selected MESH type objects '''
-        return context.object.type == 'MESH' and context.object.select
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
 
     def execute( self, context ):
         props = context.scene.insole_properties
@@ -811,13 +911,18 @@ class insole_props( bpy.types.PropertyGroup ):
         
         # 2. Find the vertex with the highest Y value
         max_y = -10000
+        min_y = 10000
         idx   = -1
+        idx2  = -1
         for v in bm.verts:
             if v.co.y > max_y:
                 max_y = v.co.y
                 idx   = v.index
+            if v.co.y < min_y:
+                min_y = v.co.y
+                idx2  = v.index
 
-        if idx == -1: return {'FAILED'}
+        if idx == -1 or idx == -2: return {'FAILED'}
                 
         # 3. Store y dimensions of insole. Find 25% of this value. flat_dist.
         flat_dist = o.dimensions.y * props.flat_area
@@ -827,13 +932,16 @@ class insole_props( bpy.types.PropertyGroup ):
         flat_y = bm.verts[idx].co.y - flat_dist
         mid_y  = flat_y - mid_size
 
+        # Define heel selection area
+        heel_size = o.dimensions.y * props.heel_area
+        heel_y    = bm.verts[idx2].co.y - heel_size
         
         # Go to vertex selection mode and deselect all verts
         bpy.ops.mesh.select_mode( type   = 'VERT'     )
         bpy.ops.mesh.select_all(  action = 'DESELECT' )
         
         # Select all vertices located above minimum Y value
-        orig_verts = mid_verts = flat_verts = 0
+        heel_verts = orig_verts = mid_verts = flat_verts = 0
         if area_type == 'flat':
             for v in bm.verts:
                 if v.co.y > flat_y: 
@@ -844,6 +952,11 @@ class insole_props( bpy.types.PropertyGroup ):
                 if v.co.y < flat_y and v.co.y > mid_y: 
                     v.select = True
                     mid_verts += 1
+        elif area_type == 'heel':
+            for v in bm.verts:
+                if v.co.y < heel_y: 
+                    v.select = True
+                    heel_verts += 1
         else: # Select all unchanged ('orig') vertices
             for v in bm.verts:
                 if v.co.y < mid_y: 
@@ -854,11 +967,14 @@ class insole_props( bpy.types.PropertyGroup ):
         # TODO: move this back to update_materials
         if mat_idx != -1:
             o.active_material_index = mat_idx
-            bpy.ops.object.mode_set(mode ='OBJECT')
-            bpy.ops.object.mode_set(mode ='EDIT')
+            bpy.ops.object.mode_set( mode = 'OBJECT' )
+            bpy.ops.object.mode_set( mode = 'EDIT' )
             bpy.ops.object.material_slot_assign()
         
-        return idx
+        if area_type == 'heel':
+            return idx2
+        else:
+            return idx
 
     def update_materials( self, context ):
         ''' Update visual preview of flattenning effect '''
@@ -926,6 +1042,9 @@ class insole_props( bpy.types.PropertyGroup ):
             
         bpy.ops.object.mode_set(mode ='OBJECT')
 
+    def update_heel_materials( self, context ):
+        pass
+
     flat_area = bpy.props.FloatProperty(
         description = "Percentage of scan to be flattened, from front to back",
         name        = "Flat Area",
@@ -936,6 +1055,16 @@ class insole_props( bpy.types.PropertyGroup ):
         update      = update_materials
     )
 
+    heel_area = bpy.props.FloatProperty(
+        description = "Percentage of scan defining the heel area",
+        name        = "Heel Area",
+        subtype     = 'FACTOR',
+        default     = 0.25,
+        min         = 0.0,
+        max         = 1.0,
+        update      = update_materials
+    )
+    
     falloff = bpy.props.FloatProperty(
         description = "Falloff area of flattenning tool",
         name        = "Flat Falloff",
@@ -957,48 +1086,188 @@ class insole_props( bpy.types.PropertyGroup ):
 
 right_foot_insole_curve_coordinates = [
   {
-    "point": [ -0.6314261555671692, -0.3624125123023987, 0 ], 
-    "lh": {
-      "co"   : [ -0.3986741602420807, -1.1438326835632324, 0 ], 
-      "type" : "ALIGNED"
-    }, 
     "rh": {
-      "co"   : [ -1.147887945175171, 1.3715088367462158, 0 ],
-      "type" : "ALIGNED"
-    }
+      "type": "ALIGNED", 
+      "co": [
+        -52.266014099121094, 
+        27.295093536376953, 
+        0.0
+      ]
+    }, 
+    "lh": {
+      "type": "ALIGNED", 
+      "co": [
+        -30.258426666259766, 
+        -40.74249267578125, 
+        0.0
+      ]
+    }, 
+    "point": [
+      -37.095340728759766, 
+      -19.605823516845703, 
+      0.0
+    ]
   }, 
   {
-    "point": [ -0.31932520866394043, 2.391295909881592, 0 ], 
-    "lh": {
-      "co"   : [ -1.2208094596862793, 2.3732688426971436, 0 ], 
-      "type" : "ALIGNED"
-    }, 
     "rh": {
-      "co"   : [ 0.6398943662643433, 2.41047739982605, 0 ], 
-      "type" : "ALIGNED"
-    }
+      "type": "ALIGNED", 
+      "co": [
+        -57.40950012207031, 
+        115.08479309082031, 
+        0.0
+      ]
+    }, 
+    "lh": {
+      "type": "ALIGNED", 
+      "co": [
+        -60.92235565185547, 
+        64.29387664794922, 
+        0.0
+      ]
+    }, 
+    "point": [
+      -59.16592788696289, 
+      89.6893310546875, 
+      0.0
+    ]
   }, 
   {
-    "point": [ 0.8148716688156128, -0.5427557229995728, 0 ], 
-    "lh": {
-      "co"   : [ 1.027264952659607, 0.9133864641189575, 0 ], 
-      "type" : "FREE"
-    }, 
     "rh": {
-      "co"   : [ 0.6966830492019653, -1.7818933725357056, 0 ], 
-      "type" : "FREE"
-    }
+      "type": "ALIGNED", 
+      "co": [
+        9.416471481323242, 
+        129.8833770751953, 
+        0.0
+      ]
+    }, 
+    "lh": {
+      "type": "ALIGNED", 
+      "co": [
+        -45.24030303955078, 
+        128.87692260742188, 
+        0.0
+      ]
+    }, 
+    "point": [
+      -18.759876251220703, 
+      129.36453247070312, 
+      0.0
+    ]
   }, 
   {
-    "point": [ -0.15875260531902313, -2.6983823776245117, 0 ], 
-    "lh": {
-      "co"   : [ 0.8510141968727112, -2.9746973514556885, 0 ], 
-      "type" : "ALIGNED"
-    }, 
     "rh": {
-      "co"   : [ -0.7176949977874756, -2.5454320907592773, 0 ], 
-      "type" : "ALIGNED"
-    }
+      "type": "FREE", 
+      "co": [
+        51.541465759277344, 
+        49.96627426147461, 
+        0.0
+      ]
+    }, 
+    "lh": {
+      "type": "FREE", 
+      "co": [
+        29.194015502929688, 
+        109.89535522460938, 
+        0.0
+      ]
+    }, 
+    "point": [
+      40.367740631103516, 
+      79.93081665039062, 
+      0.0
+    ]
+  }, 
+  {
+    "rh": {
+      "type": "FREE", 
+      "co": [
+        44.40078353881836, 
+        -62.87953567504883, 
+        0.0
+      ]
+    }, 
+    "lh": {
+      "type": "FREE", 
+      "co": [
+        54.11138153076172, 
+        10.025206565856934, 
+        0.0
+      ]
+    }, 
+    "point": [
+      47.87248611450195, 
+      -29.36204719543457, 
+      0.0
+    ]
+  }, 
+  {
+    "rh": {
+      "type": "ALIGNED", 
+      "co": [
+        32.898555755615234, 
+        -141.05630493164062, 
+        0.0
+      ]
+    }, 
+    "lh": {
+      "type": "ALIGNED", 
+      "co": [
+        44.93161392211914, 
+        -95.7703857421875, 
+        0.0
+      ]
+    }, 
+    "point": [
+      38.91508483886719, 
+      -118.41334533691406, 
+      0.0
+    ]
+  }, 
+  {
+    "rh": {
+      "type": "ALIGNED", 
+      "co": [
+        -25.744993209838867, 
+        -141.8401641845703, 
+        0.0
+      ]
+    }, 
+    "lh": {
+      "type": "ALIGNED", 
+      "co": [
+        20.334665298461914, 
+        -153.45138549804688, 
+        0.0
+      ]
+    }, 
+    "point": [
+      -9.32647705078125, 
+      -145.97732543945312, 
+      0.0
+    ]
+  }, 
+  {
+    "rh": {
+      "type": "ALIGNED", 
+      "co": [
+        -31.525466918945312, 
+        -70.26678466796875, 
+        0.0
+      ]
+    }, 
+    "lh": {
+      "type": "ALIGNED", 
+      "co": [
+        -29.268753051757812, 
+        -120.81562805175781, 
+        0.0
+      ]
+    }, 
+    "point": [
+      -30.397109985351562, 
+      -95.54120635986328, 
+      0.0
+    ]
   }
 ]
     
