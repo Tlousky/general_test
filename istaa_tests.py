@@ -50,9 +50,12 @@ for case in [
     'str_length',
     'pos_of_quotemark',
     'pos_of_hypehn',
+    'pos_of_comma',
     'len_quotes',
     'len_hyphens',
-    'len_quotes_hyphens'
+    'len_commas',
+    'len_quotes_hyphens',
+    'len_quotes_hyphens_commas'
     ]:
     test_cases[ case ] = []
 
@@ -102,7 +105,24 @@ test_cases['pos_of_hypehn'].append( '-' + base + '-' )
 # Hyphen at the beginning, middle and end of the sentence
 test_cases['pos_of_hypehn'].append( '-' + "".join(s) + '-' )
 
-# print( json.dumps( test_cases, indent=2 ) )
+## Commas
+# Comma at the begining of the sentence
+base = random_heb_sentence( 50 )
+test_cases['pos_of_comma'].append( ',' + base ) 
+
+# Comma at the end of the sentence
+test_cases['pos_of_comma'].append( base + ',' ) 
+
+# Comma at the middle of the sentence
+s = list( base )
+s.insert( round((len(s)-1)/2), ',' )
+test_cases['pos_of_comma'].append( "".join(s) )
+
+# Comma at the beginning and the end of the sentence
+test_cases['pos_of_comma'].append( ',' + base + ',' )
+
+# Comma at the beginning, middle and end of the sentence
+test_cases['pos_of_comma'].append( ',' + "".join(s) + ',' )
 
 # Length-quotes
 for i in range(5,205,5):
@@ -116,7 +136,7 @@ for i in range(5,205,5):
     test_cases['len_quotes'].append( s + '"' ) 
 
     # Quote at the middle of the sentence
-    l = list( base )
+    l = list( s )
     l.insert( round((len(s)-1)/2), '"' )
     test_cases['len_quotes'].append( "".join(l) )
 
@@ -134,7 +154,7 @@ for i in range(5,205,5):
     test_cases['len_hyphens'].append( s + '-' ) 
 
     # Hyphen at the middle of the sentence
-    l = list( base )
+    l = list( s )
     l.insert( round((len(s)-1)/2), '-' )
     test_cases['len_hyphens'].append( "".join(l) )
 
@@ -152,7 +172,7 @@ for i in range(5,205,5):
     test_cases['len_quotes_hyphens'].append( '-' + s + '"' ) 
 
     # Double quotes with a hyphen in the middle
-    l = list( base )
+    l = list( s )
     l.insert( round((len(s)-1)/2), '-' )
     test_cases['len_quotes_hyphens'].append( '"' + "".join(l) + '"' ) 
 
@@ -160,11 +180,20 @@ for i in range(5,205,5):
     p1 = random.randint( 0, len(l) - 1 )
     p2 = random.randint( 0, len(l) - 1 )
 
-    l = list( base )
+    l = list( s )
     l.insert( p1, "-" )
     l.insert( p2, '"' )
 
     test_cases['len_quotes_hyphens'].append( "".join(l) ) 
+
+    # Insert random hyphens, quotes and commas
+    for i in range(10):
+        l = list( s )
+        for c in [ "-", '"', '"', ",", ",", ",", "," ]:
+            p = random.randint( 0, len(l) - 1 )
+            l.insert( p, c )
+        
+        test_cases['len_quotes_hyphens_commas'].append( "".join(l) ) 
 
 logfile.write( "Test starting at %s\n" % datetime.now() )
 for i, tt in enumerate(test_cases):
