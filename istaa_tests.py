@@ -32,15 +32,18 @@ def test_page_loaded( b, case, logfile ):
 
 url = "http://www.kampyle.com/feedback_form/ff-feedback-form.php?site_code=3131167&form_id=100152&lang=he&param[domain]=www.issta.co.il&param[siteSection]=non-match&param[refGclid]=false&param[utmz_timestamp]=1392628406&param[utmz_numberOfSessions]=1&param[utmz_visitSources]=1&param[utmcsr]=(direct)&param[utmccn]=(direct)&param[utmcmd]=(none)&param[sessionCounter]=1&param[cookie_k_click]=4&param[bind]=Loading%3ABindingTo_DOMContentLoaded&param[k_loadtimeMS]=4&param[hostName]=www.issta.co.il&param[pagePath]=%2F&param[pageTitle]=%D7%90%D7%99%D7%A1%D7%AA%D7%90%20-%20%D7%98%D7%99%D7%A1%D7%95%D7%AA%20%D7%9C%D7%97%D7%95%22%D7%9C%2C%20%D7%A0%D7%95%D7%A4%D7%A9%20%D7%91%D7%97%D7%95%22%D7%9C%2C%20%D7%93%D7%99%D7%9C%D7%99%D7%9D%2C%20%D7%9E%D7%9C%D7%95%D7%A0%D7%95%D7%AA%2C%20%D7%A0%D7%95%D7%A4%D7%A9%20%D7%91%D7%90%D7%A8%D7%A5&param[refHostName]=direct&param[refURL]=direct&param[refFilename]=direct&param[LandingPage]=direct&param[windowWidth]=1280&param[windowHeight]=679&param[windowSize]=1280x679&param[time_OnSite]=00%3A12%3A37&param[time_OnSiteInSecs]=757&param[time_OnSiteInMins]=12&param[buttonRev]=KB%3A19822%7CKP%3A18687%7CIssta%7CKC%3Av6.52_27Feb13&vectors=60444405010913_1392629162914&time_on_site=755&stats=k_button_js_revision%3D19822%26k_push_js_revision%3D18687%26view_percentage%3D100%26display_after%3D50&url=http%3A%2F%2Fwww.issta.co.il%2F&utmb=136873000.8.9.1392629162916&utma=136873000.694914551.1392628404.1392628406.1392628406.1"
 
-pat = "(.+\[pageTitle\]=)([\d\w%-]+)(&.+)"
+pat =  "(.+\[pageTitle\]=)"  # everything until the "pageTitle" param
+pat += "([\d\w%-]+)"         # The actual page title (value)
+pat += "(&.+)"               # everything after the page title
 start, page_title, end = re.match( pat, url ).groups()
 
 heb_chars = u"אבגדהוזחטיכלמםנןסעפףצץקרשת"
 eng_chars = "abcdefghijklmnopqrstuvexyz"
 
-orig_title = 'איסתא - טיסות לחו"ל, נופש בחו"ל, דילים, מלונות, נופש בארץ'
+orig_title = u'איסתא - טיסות לחו"ל, נופש בחו"ל, דילים, מלונות, נופש בארץ'
 
 b = webdriver.Ie()
+b.set_page_load_timeout( 5 )
 
 test_cases = {}
 
@@ -58,14 +61,16 @@ for case in [
     'len_commas',
     'len_quotes_hyphens',
     'len_quotes_hyphens_commas',
-    'original_string'
+    'original_string',
+    'scrambled'
     ]:
     test_cases[ case ] = []
 
-build_up = ""
-for c in orig_title:
-    build_up += c
-    test_cases['original_string'].append( build_up )
+def build_up_title():
+    build_up = ""
+    for c in orig_title:
+        build_up += c
+        test_cases['original_string'].append( build_up )
 
 def create_random_tests():
     ## Length
@@ -204,18 +209,31 @@ def create_random_tests():
             
             test_cases['len_quotes_hyphens_commas'].append( "".join(l) ) 
 
+
+
+for i in range( 10 ):
+    words = orig_title.split()
+    rebuilt = []
+    for i in range( len(words) ):
+        w = words.pop( words.index( random.choice( words ) ) )
+        rebuilt.append( w )
+
+    new_title = " ".join( rebuilt )
+    test_cases['scrambled'].append( new_title )
+
 logfile.write( "Test starting at %s\n" % datetime.now() )
 for i, tt in enumerate(test_cases):
     if tt:
         logfile.write( "\t%s. Testing %s\n" % (i,tt) )
         for j,t in enumerate(test_cases[tt]):
-            title   = quote( t.encode("utf-8") )
+            title   = quote( t )
             new_url = start + title + end
 
             print( "%s | Testing len: %s" % ( tt, len(t) ) )
             logfile.write( "\t\t%s.%s. Testing len: %s\n" % (i,j,len(t)) )
             logfile.write( "\t\tString: %s\n" % unquote(t, encoding='cp1255') )
-            logfile.write( "\t\tQuoted: %s\n" % title )
+            logfile.write( "\t\tQuoted: %s\n" % title   )
+            logfile.write( "\t\tURL: %s\n"    % new_url )
             if tt in [ 'pos_of_quotemark', 'len_quotes', 'len_quotes_hyphens' ]:
                 qcount = t.count('"')
                 qpos   = t.index('"')
@@ -228,12 +246,30 @@ for i, tt in enumerate(test_cases):
 
             start_time = datetime.now()
 
-            b.get( new_url )
+            try:
+                b.get( new_url )    
+            except TimeoutException:
+                print( "*** Failed to load form with pageTitle: %s ***" % case )
+                logfile.write( "\t\t***Failed to load form ***\n" )
+
             test_page_loaded( b, t.encode('cp1255'), logfile )
 
             end_time = datetime.now()
             dt = end_time - start_time
 
             logfile.write( "\t\tTime taken: %s seconds\n" % dt.seconds )
+
+logfile.write( "\tX. Testing original url that should fail\n" )
+logfile.write( "\t\tString: %s\n" % unquote(page_title) )
+logfile.write( "\t\tQuoted: %s\n" % quote( page_title ) )
+logfile.write( "\t\tURL: %s\n"    % url )
+
+try:
+    b.get( url )    
+except TimeoutException:
+    print( "*** Failed to load form with pageTitle: %s ***" % case )
+    logfile.write( "\t\t***Failed to load form ***\n" )
+
+test_page_loaded( b, 'original_url', logfile )
 
 logfile.close()
