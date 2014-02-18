@@ -38,6 +38,8 @@ start, page_title, end = re.match( pat, url ).groups()
 heb_chars = u"אבגדהוזחטיכלמםנןסעפףצץקרשת"
 eng_chars = "abcdefghijklmnopqrstuvexyz"
 
+orig_title = 'איסתא - טיסות לחו"ל, נופש בחו"ל, דילים, מלונות, נופש בארץ'
+
 b = webdriver.Ie()
 
 test_cases = {}
@@ -55,145 +57,152 @@ for case in [
     'len_hyphens',
     'len_commas',
     'len_quotes_hyphens',
-    'len_quotes_hyphens_commas'
+    'len_quotes_hyphens_commas',
+    'original_string'
     ]:
     test_cases[ case ] = []
 
-## Length
-# Create random sequence of "words" separated by spaces with a length of
-# up to 200 chars, growing by 5 chars every time
-# A space has a change of 20% to be added to the string
-for i in range(5,205,5):
-    s = random_heb_sentence( i )
-    test_cases['str_length'].append( s ) 
+build_up = ""
+for c in orig_title:
+    build_up += c
+    test_cases['original_string'].append( build_up )
 
-## Quotes
-# Quote at the begining of the sentence
-base = random_heb_sentence( 50 )
-test_cases['pos_of_quotemark'].append( '"' + base ) 
+def create_random_tests():
+    ## Length
+    # Create random sequence of "words" separated by spaces with a length of
+    # up to 200 chars, growing by 5 chars every time
+    # A space has a change of 20% to be added to the string
+    for i in range(5,205,5):
+        s = random_heb_sentence( i )
+        test_cases['str_length'].append( s ) 
 
-# Quote at the end of the sentence
-test_cases['pos_of_quotemark'].append( base + '"' ) 
-
-# Quote at the middle of the sentence
-s = list( base )
-s.insert( round((len(s)-1)/2), '"' )
-test_cases['pos_of_quotemark'].append( "".join(s) )
-
-# Quote at the beginning and the end of the sentence
-test_cases['pos_of_quotemark'].append( '"' + base + '"' )
-
-# Quote at the beginning, middle and end of the sentence
-test_cases['pos_of_quotemark'].append( '"' + "".join(s) + '"' )
-
-## Hyphens
-# Hyphen at the begining of the sentence
-base = random_heb_sentence( 50 )
-test_cases['pos_of_hypehn'].append( '-' + base ) 
-
-# Hyphen at the end of the sentence
-test_cases['pos_of_hypehn'].append( base + '-' ) 
-
-# Hyphen at the middle of the sentence
-s = list( base )
-s.insert( round((len(s)-1)/2), '-' )
-test_cases['pos_of_hypehn'].append( "".join(s) )
-
-# Hyphen at the beginning and the end of the sentence
-test_cases['pos_of_hypehn'].append( '-' + base + '-' )
-
-# Hyphen at the beginning, middle and end of the sentence
-test_cases['pos_of_hypehn'].append( '-' + "".join(s) + '-' )
-
-## Commas
-# Comma at the begining of the sentence
-base = random_heb_sentence( 50 )
-test_cases['pos_of_comma'].append( ',' + base ) 
-
-# Comma at the end of the sentence
-test_cases['pos_of_comma'].append( base + ',' ) 
-
-# Comma at the middle of the sentence
-s = list( base )
-s.insert( round((len(s)-1)/2), ',' )
-test_cases['pos_of_comma'].append( "".join(s) )
-
-# Comma at the beginning and the end of the sentence
-test_cases['pos_of_comma'].append( ',' + base + ',' )
-
-# Comma at the beginning, middle and end of the sentence
-test_cases['pos_of_comma'].append( ',' + "".join(s) + ',' )
-
-# Length-quotes
-for i in range(5,205,5):
-    s = random_heb_sentence( i )
-
-    ## Quotes with various length strings
+    ## Quotes
     # Quote at the begining of the sentence
-    test_cases['len_quotes'].append( '"' + s ) 
+    base = random_heb_sentence( 50 )
+    test_cases['pos_of_quotemark'].append( '"' + base ) 
 
     # Quote at the end of the sentence
-    test_cases['len_quotes'].append( s + '"' ) 
+    test_cases['pos_of_quotemark'].append( base + '"' ) 
 
     # Quote at the middle of the sentence
-    l = list( s )
-    l.insert( round((len(s)-1)/2), '"' )
-    test_cases['len_quotes'].append( "".join(l) )
+    s = list( base )
+    s.insert( round((len(s)-1)/2), '"' )
+    test_cases['pos_of_quotemark'].append( "".join(s) )
 
     # Quote at the beginning and the end of the sentence
-    test_cases['len_quotes'].append( '"' + s + '"' )
+    test_cases['pos_of_quotemark'].append( '"' + base + '"' )
 
     # Quote at the beginning, middle and end of the sentence
-    test_cases['len_quotes'].append( '"' + "".join(l) + '"' )
+    test_cases['pos_of_quotemark'].append( '"' + "".join(s) + '"' )
 
-    ## Hyphens with various length strings
+    ## Hyphens
     # Hyphen at the begining of the sentence
-    test_cases['len_hyphens'].append( '-' + s ) 
+    base = random_heb_sentence( 50 )
+    test_cases['pos_of_hypehn'].append( '-' + base ) 
 
     # Hyphen at the end of the sentence
-    test_cases['len_hyphens'].append( s + '-' ) 
+    test_cases['pos_of_hypehn'].append( base + '-' ) 
 
     # Hyphen at the middle of the sentence
-    l = list( s )
-    l.insert( round((len(s)-1)/2), '-' )
-    test_cases['len_hyphens'].append( "".join(l) )
+    s = list( base )
+    s.insert( round((len(s)-1)/2), '-' )
+    test_cases['pos_of_hypehn'].append( "".join(s) )
 
     # Hyphen at the beginning and the end of the sentence
-    test_cases['len_hyphens'].append( '-' + s + '-' )
+    test_cases['pos_of_hypehn'].append( '-' + base + '-' )
 
     # Hyphen at the beginning, middle and end of the sentence
-    test_cases['len_hyphens'].append( '-' + "".join(l) + '-' )
+    test_cases['pos_of_hypehn'].append( '-' + "".join(s) + '-' )
 
-    ## Quotes and Hyphens with various length strings
-    # Quote at the beginning and a hyphen at the end
-    test_cases['len_quotes_hyphens'].append( '"' + s + "-" ) 
+    ## Commas
+    # Comma at the begining of the sentence
+    base = random_heb_sentence( 50 )
+    test_cases['pos_of_comma'].append( ',' + base ) 
 
-    # Hypehn at the beginning and a quote at the end
-    test_cases['len_quotes_hyphens'].append( '-' + s + '"' ) 
+    # Comma at the end of the sentence
+    test_cases['pos_of_comma'].append( base + ',' ) 
 
-    # Double quotes with a hyphen in the middle
-    l = list( s )
-    l.insert( round((len(s)-1)/2), '-' )
-    test_cases['len_quotes_hyphens'].append( '"' + "".join(l) + '"' ) 
+    # Comma at the middle of the sentence
+    s = list( base )
+    s.insert( round((len(s)-1)/2), ',' )
+    test_cases['pos_of_comma'].append( "".join(s) )
 
-    # Insert random 3 hyphens and 2 quotes
-    p1 = random.randint( 0, len(l) - 1 )
-    p2 = random.randint( 0, len(l) - 1 )
+    # Comma at the beginning and the end of the sentence
+    test_cases['pos_of_comma'].append( ',' + base + ',' )
 
-    l = list( s )
-    l.insert( p1, "-" )
-    l.insert( p2, '"' )
+    # Comma at the beginning, middle and end of the sentence
+    test_cases['pos_of_comma'].append( ',' + "".join(s) + ',' )
 
-    test_cases['len_quotes_hyphens'].append( "".join(l) ) 
+    # Length-quotes
+    for i in range(5,205,5):
+        s = random_heb_sentence( i )
 
-    # Insert random hyphens, quotes and commas
-    for i in range(10):
+        ## Quotes with various length strings
+        # Quote at the begining of the sentence
+        test_cases['len_quotes'].append( '"' + s ) 
+
+        # Quote at the end of the sentence
+        test_cases['len_quotes'].append( s + '"' ) 
+
+        # Quote at the middle of the sentence
         l = list( s )
-        for c in [ "-", '"', '"', ",", ",", ",", "," ]:
-            p = random.randint( 0, len(l) - 1 )
-            l.insert( p, c )
-        
-        test_cases['len_quotes_hyphens_commas'].append( "".join(l) ) 
+        l.insert( round((len(s)-1)/2), '"' )
+        test_cases['len_quotes'].append( "".join(l) )
+
+        # Quote at the beginning and the end of the sentence
+        test_cases['len_quotes'].append( '"' + s + '"' )
+
+        # Quote at the beginning, middle and end of the sentence
+        test_cases['len_quotes'].append( '"' + "".join(l) + '"' )
+
+        ## Hyphens with various length strings
+        # Hyphen at the begining of the sentence
+        test_cases['len_hyphens'].append( '-' + s ) 
+
+        # Hyphen at the end of the sentence
+        test_cases['len_hyphens'].append( s + '-' ) 
+
+        # Hyphen at the middle of the sentence
+        l = list( s )
+        l.insert( round((len(s)-1)/2), '-' )
+        test_cases['len_hyphens'].append( "".join(l) )
+
+        # Hyphen at the beginning and the end of the sentence
+        test_cases['len_hyphens'].append( '-' + s + '-' )
+
+        # Hyphen at the beginning, middle and end of the sentence
+        test_cases['len_hyphens'].append( '-' + "".join(l) + '-' )
+
+        ## Quotes and Hyphens with various length strings
+        # Quote at the beginning and a hyphen at the end
+        test_cases['len_quotes_hyphens'].append( '"' + s + "-" ) 
+
+        # Hypehn at the beginning and a quote at the end
+        test_cases['len_quotes_hyphens'].append( '-' + s + '"' ) 
+
+        # Double quotes with a hyphen in the middle
+        l = list( s )
+        l.insert( round((len(s)-1)/2), '-' )
+        test_cases['len_quotes_hyphens'].append( '"' + "".join(l) + '"' ) 
+
+        # Insert random 3 hyphens and 2 quotes
+        p1 = random.randint( 0, len(l) - 1 )
+        p2 = random.randint( 0, len(l) - 1 )
+
+        l = list( s )
+        l.insert( p1, "-" )
+        l.insert( p2, '"' )
+
+        test_cases['len_quotes_hyphens'].append( "".join(l) ) 
+
+        # Insert random hyphens, quotes and commas
+        for i in range(10):
+            l = list( s )
+            for c in [ "-", '"', '"', ",", ",", ",", "," ]:
+                p = random.randint( 0, len(l) - 1 )
+                l.insert( p, c )
+            
+            test_cases['len_quotes_hyphens_commas'].append( "".join(l) ) 
 
 logfile.write( "Test starting at %s\n" % datetime.now() )
 for i, tt in enumerate(test_cases):
@@ -206,6 +215,7 @@ for i, tt in enumerate(test_cases):
             print( "%s | Testing len: %s" % ( tt, len(t) ) )
             logfile.write( "\t\t%s.%s. Testing len: %s\n" % (i,j,len(t)) )
             logfile.write( "\t\tString: %s\n" % unquote(t, encoding='cp1255') )
+            logfile.write( "\t\tQuoted: %s\n" % title )
             if tt in [ 'pos_of_quotemark', 'len_quotes', 'len_quotes_hyphens' ]:
                 qcount = t.count('"')
                 qpos   = t.index('"')
