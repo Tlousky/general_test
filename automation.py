@@ -185,11 +185,11 @@ class insole_automation_tools( bpy.types.Panel ):
         r  = bc.row()
         
         if ta == 'Front':
-            r.prop( context.scene.insole_properties, 'flat_area' )
+            r.prop( context.scene.insole_properties, 'flat_area'    )
+            r.prop( context.scene.insole_properties, 'falloff'      )
         else:
-            r.prop( context.scene.insole_properties, 'heel_area' )
-
-        r.prop( context.scene.insole_properties, 'prop_falloff' )
+            r.prop( context.scene.insole_properties, 'heel_area'    )
+            r.prop( context.scene.insole_properties, 'prop_falloff' )
         
         bc.prop( context.scene.insole_properties, 'twist_angle' )
         
@@ -1341,11 +1341,13 @@ class insole_props( bpy.types.PropertyGroup ):
             uses twist_angle as proportional size
         '''
         o       = context.object
-        falloff = self.prop_falloff
-
-        vector = ( 0, self.twist_angle, 0 )
+        vector  = ( 0, self.twist_angle, 0 )
 
         area_dict = { 'Front' : 'flat', 'Heel' : 'heel' }
+
+        # If front is used, then the flat falloff is used and it must be synced
+        # with the ordinary proportional falloff
+        if area_dict == 'Front': self.prop_falloff = self.falloff
         
         self.proportional_transform( 
             context, area_dict[ self.twist_area ], vector, 'rotate'
@@ -1414,7 +1416,8 @@ class insole_props( bpy.types.PropertyGroup ):
     twist_area = bpy.props.EnumProperty(
         name    = "Area",
         items   = [('Front', 'Front', ''), ('Heel', 'Heel', '')], 
-        default = 'Front'
+        default = 'Front',
+        update  = update_twist_area
     )
 
     twist_angle = bpy.props.FloatProperty(
