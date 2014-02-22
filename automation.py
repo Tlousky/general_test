@@ -141,12 +141,19 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'TRIA_RIGHT'
         ).direction = 'R'
 
-        bc.operator( 
+        r  = bc.row()
+        r.operator( 
+            'object.create_front_controls',
+            text = 'Front Adjustment',
+            icon = 'LATTICE_DATA'
+        )
+        
+        r.operator( 
             'object.trim_insole',
             text = 'Trim Insole',
             icon = 'CURVE_DATA'
         )
-
+        
         # Heel fixing props and operators
         b  = col.box()
         bc = b.column()
@@ -939,7 +946,7 @@ class preview_heel( bpy.types.Operator ):
         context.scene.insole_properties.update_heel_materials( context )
         
         return {'FINISHED'}
-
+              
 class create_insole_from_curve( bpy.types.Operator ):
     """ Create mesh insole object from curve and scan """
     bl_idname      = "object.trim_insole"
@@ -1077,6 +1084,208 @@ class create_insole_from_curve( bpy.types.Operator ):
 
         return {'FINISHED'}
 
+class fill_holes( bpy.types.Operator ):
+    """ Create empties for easy control over front """
+    bl_idname      = "object.fill_insole_holes"
+    bl_label       = "Fill Holes"
+    bl_description = "Fill holes in the insole mesh"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with selected MESH type objects '''
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
+
+    def execute( self, context ):
+        ''' Select non-manifold geometry and beauty fill holes '''
+        # 1. Go to edit mode and create bmesh object
+        if o.mode != 'EDIT': bpy.ops.object.mode_set(mode = 'EDIT')
+        
+        bpy.ops.mesh.select_all( action = 'DESELECT' ) # Deselect all vertices
+
+        # Select non manifold geometry (outline verts)
+        bpy.ops.mesh.select_non_manifold()
+
+        # Beauty-fill selected mesh
+        bpy.ops.mesh.beauty_fill()
+        
+        return {'FINISHED'}
+            
+class create_front_controls( bpy.types.Operator ):
+    """ Create empties for easy control over front """
+    bl_idname      = "object.create_front_controls"
+    bl_label       = "Create Front Controls"
+    bl_description = "Create controls for easy tranformation of front"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with selected MESH type objects '''
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
+
+    def create_lattice( self, context ):
+        obj   = context.scene.objects[ context.object.name ]
+        props = context.scene.insole_properties
+
+        # Create lattice
+        bpy.ops.object.add( type='LATTICE' )
+        
+        lattice = context.scene.objects[ context.object.name ]
+
+        # Scale to insole object's dimensions
+        lattice.scale = obj.dimensions
+
+        # Find rearmost point of lattice
+        rear = 10000
+        pidx = -1
+        for i,p in enumerate( lattice.data.points ):
+            co = p.co * lattice.matrix_world
+            if co.y < rear: 
+                rear = co.y
+                pidx = i
+            
+        # Find distance between it and the rearmost point on the insole
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        obj.select = True
+        context.scene.objects.active = obj
+
+        idx          = props.select_area( context, 'heel' )
+        rear_vert_co = obj.data.vertices[ idx ].co * obj.matrix_world
+        
+        lattice_rear_co = lattice.data.points[ pidx ].co * lattice.matrix_world
+        diff = rear_vert_co.y - lattice_rear_co.y
+       
+        # Translate lattice to fit position of rearmost point on insole
+        bpy.ops.object.mode_set( mode = 'OBJECT' )
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        lattice.select = True
+        context.scene.objects.active = lattice
+
+        bpy.ops.transform.translate(
+            value            = ( 0, diff, 0 ), 
+            constraint_axis  = ( False, True, False )
+        )
+        
+        # Divide lattice 
+        lattice.data.points_u = 3
+        lattice.data.points_v = 4
+        lattice.data.points_w = 2
+        
+        # Remove inner lattice points
+        lattice.data.use_outside = True
+
+        # Add lattice modifier to insole
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        obj.select = True
+        context.scene.objects.active = obj
+        
+        bpy.ops.object.modifier_add( type = 'LATTICE' )
+        
+        # Bind lattice modifier to created lattice
+        obj.modifiers[-1].object = lattice
+        
+        return obj, lattice
+
+    def select_lattice( self, context, lattice ):
+        ''' Select lattice object '''
+
+        bpy.ops.object.mode_set( mode = 'OBJECT' )
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        lattice.select = True
+        context.scene.objects.active = lattice        
+        
+    def create_empties( self, context, obj, lattice ):
+        self.select_lattice( context, lattice )
+
+        # Go to edit mode
+        bpy.ops.object.mode_set( mode = 'EDIT' )
+        
+        # Deselect all lattice points
+        bpy.ops.lattice.select_all( action = 'DESELECT' )
+        
+        # Select frontmost two points at center
+        all_points = { 'front' : [], 'left' : [], 'right' : [] }
+        for i,p in enumerate( lattice.data.points ):
+            if p.co.y == 0.5 and p.co.z = 0.0: 
+                points['front'].append( i )
+            elif p.co.x == 0.5 and p.co.y == 0.5:
+                points['right'].append( i )
+            elif p.co.x == -0.5 and p.co.y == 0.5:
+                points['left'].append( i )
+
+        hooks = {}
+        for pdir in all_points.keys():
+            points = all_points[ pdir ]
+            hook   = self.create_empty( context )
+            hooks[ pdir ] = hook
+
+            self.hook_lattice_to_empty( context, empty, lattice, points )
+            
+        return hooks
+
+    def create_empty( self, context ):
+        # Move cursor to selected
+        bpy.ops.view3d.snap_cursor_to_selected()
+        
+        bpy.ops.object.mode_set( mode = 'OBJECT' )
+
+        # Create cubic empty and set a reasonable draw size
+        bpy.ops.object.empty_add( type = 'CUBE' )
+
+        empties = [ 
+            e.name for e in context.scene.objects if 'Empty' in e.name 
+        ]
+        empties.sort()
+
+        empty = context.scene.objects[ empties[-1] ]
+        empty.empty_draw_size = 10
+
+        return empty
+        
+    def hook_lattice_to_empty( self, context, empty, lattice, points ):
+
+        # Select both empty (first), then curve
+        bpy.ops.object.select_all( action = 'DESELECT' ) # deselect all
+        empty.select   = True
+        lattice.select = True
+        context.scene.objects.active = lattice
+        
+        # Go to edit mode
+        bpy.ops.object.mode_set(mode = 'EDIT')
+        
+        # Create hook modifier for the selected point
+        bpy.ops.lattice.select_all( action = 'DESELECT' )
+        for p in points: lattice.data.points[ p ].select = True
+        
+        bpy.ops.object.hook_add_selob()
+            
+    def execute( self, context ):
+        ''' Operator's main function '''
+
+        # Go to top ortho view
+        bpy.ops.object.orient_scan( view = 'TOP' )
+        
+        # Create lattice
+        obj, lattice = self.create_lattice( context )
+        
+        # create empties
+        hooks = self.create_empties( context, obj, lattice )
+        
+        # select top empty
+        bpy.ops.object.mode_set( mode = 'OBJECT' )
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        
+        hooks[ 'front' ].select = True
+        context.scene.objects.active = hooks[ 'front' ]
+        
+        return {'FINISHED'}
+        
 class insole_props( bpy.types.PropertyGroup ):
     def find_nearest_vert( self, obj, point):
         """ Find the closest vert on the mesh to provided point """
@@ -1469,7 +1678,7 @@ class insole_props( bpy.types.PropertyGroup ):
         min         = 0.0,
         max         = 1.0
     )
-    
+
 right_foot_insole_curve_coordinates = [
   {
     "rh": {
