@@ -185,11 +185,11 @@ class insole_automation_tools( bpy.types.Panel ):
         r  = bc.row()
         
         if ta == 'Front':
-            r.prop( context.scene.insole_properties, 'flat_area'    )
-            r.prop( context.scene.insole_properties, 'falloff'      )
+            r.prop( context.scene.insole_properties, 'flat_area'          )
+            r.prop( context.scene.insole_properties, 'falloff'            )
         else:
-            r.prop( context.scene.insole_properties, 'heel_area'    )
-            r.prop( context.scene.insole_properties, 'prop_falloff' )
+            r.prop( context.scene.insole_properties, 'heel_area'          )
+            r.prop( context.scene.insole_properties, 'heel_twist_falloff' )
         
         bc.prop( context.scene.insole_properties, 'twist_angle' )
         
@@ -1132,13 +1132,16 @@ class insole_props( bpy.types.PropertyGroup ):
         # Define heel selection area
         heel_size = o.dimensions.y * props.heel_area
         heel_y    = bm.verts[idx2].co.y + heel_size
+
+        # Define heel falloff area
+        heel_falloff_y = heel_y + o.dimensions.y * props.heel_twist_falloff
         
         # Go to vertex selection mode and deselect all verts
         bpy.ops.mesh.select_mode( type   = 'VERT'     )
         bpy.ops.mesh.select_all(  action = 'DESELECT' )
         
         # Select all vertices located above minimum Y value
-        heel_verts = orig_verts = mid_verts = flat_verts = 0
+        nonheel_verts = heel_verts = orig_verts = mid_verts = flat_verts = 0
         if area_type == 'flat':
             for v in bm.verts:
                 if v.co.y > flat_y: 
@@ -1146,22 +1149,29 @@ class insole_props( bpy.types.PropertyGroup ):
                     flat_verts += 1
         elif area_type == 'mid':
             for v in bm.verts:
-                if v.co.y < flat_y and v.co.y > mid_y: 
+                if v.co.y <= flat_y and v.co.y >= mid_y: 
                     v.select = True
                     mid_verts += 1
-        elif 'heel' in area_type:
+        elif area_type == 'heel':
             for v in bm.verts:
                 if v.co.y < heel_y: 
                     v.select = True
                     heel_verts += 1
+        elif area_type == 'heel_mid':
+            for v in bm.verts:
+                if v.co.y >= heel_y and v.co.y <= heel_falloff_y:
+                    v.select = True
+                    mid_verts += 1
+        elif area_type == 'non_heel':
+            for v in bm.verts:
+                if v.co.y > heel_falloff_y:
+                    v.select = True
+                    nonheel_verts += 1
         else: # Select all unchanged ('orig') vertices
             for v in bm.verts:
                 if v.co.y < mid_y: 
                     v.select = True
                     orig_verts += 1
-
-        if area_type == 'non_heel':
-            bpy.ops.mesh.select_all( action = 'INVERT' )
 
         if area_type == 'heel':
             return idx2
@@ -1265,11 +1275,13 @@ class insole_props( bpy.types.PropertyGroup ):
 
         materials = {
             'heel'     : 'heel__insole.mat',
+            'heel_mid' : 'heel_mid_insole.mat',
             'non_heel' : 'non_heel_insole.mat'
         }
 
         colors = { 
             'heel'     : Color( ( 1.0, 0.0, 0.0 ) ), # Pure red
+            'heel_mid' : Color( ( 0.5, 0.25, 0  ) ), # Yellow
             'non_heel' : Color( ( 0.0, 0.0, 1.0 ) )  # Pure blue
         }
 
@@ -1335,7 +1347,6 @@ class insole_props( bpy.types.PropertyGroup ):
         elif self.twist_area == 'Front':
             self.update_materials( context )
             
-        
     def update_twist( self, context ):
         ''' rotate front or heel area (twist_area) proportionally.
             uses twist_angle as proportional size
@@ -1347,7 +1358,10 @@ class insole_props( bpy.types.PropertyGroup ):
 
         # If front is used, then the flat falloff is used and it must be synced
         # with the ordinary proportional falloff
-        if area_dict == 'Front': self.prop_falloff = self.falloff
+        if area_dict == 'Front': 
+            self.prop_falloff = self.falloff
+        elif area_dict == 'Heel':
+             self.falloff = self.heel_twist_falloff
         
         self.proportional_transform( 
             context, area_dict[ self.twist_area ], vector, 'rotate'
@@ -1429,6 +1443,16 @@ class insole_props( bpy.types.PropertyGroup ):
         max         = 180.0,
         update      = update_twist
     )
+
+    heel_twist_falloff = bpy.props.FloatProperty(
+        description = "Falloff area for heel twist amendments",
+        name        = "Falloff",
+        subtype     = 'FACTOR',
+        default     = 0.25,
+        min         = 0.0,
+        max         = 1.0,
+        update      = update_heel_materials
+    )
     
     cumulative_twist = bpy.props.FloatProperty(
         description = "Twist angle",
@@ -1445,7 +1469,6 @@ class insole_props( bpy.types.PropertyGroup ):
         min         = 0.0,
         max         = 1.0
     )
-    
     
 right_foot_insole_curve_coordinates = [
   {
