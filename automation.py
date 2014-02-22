@@ -178,16 +178,16 @@ class insole_automation_tools( bpy.types.Panel ):
         b  = col.box()
         bc = b.column()
         l  = bc.label( "Fix twisted foot areas" )
-        r  = bc.row()
-        
-        r.prop( context.scene.insole_properties, 'twist_area' )
+       
+        bc.prop( context.scene.insole_properties, 'twist_area' )
         
         ta = context.scene.insole_properties.twist_area
+        r  = bc.row()
         
         if ta == 'Front':
-            bc.prop( context.scene.insole_properties, 'flat_area' )
+            r.prop( context.scene.insole_properties, 'flat_area' )
         else:
-            bc.prop( context.scene.insole_properties, 'heel_area' )
+            r.prop( context.scene.insole_properties, 'heel_area' )
 
         r.prop( context.scene.insole_properties, 'prop_falloff' )
         
@@ -940,51 +940,6 @@ class preview_heel( bpy.types.Operator ):
         
         return {'FINISHED'}
 
-class amend_foot_twist( bpy.types.Operator ):
-    """ Preview the heel area to be straightened """
-    bl_idname      = "object.amend_foot_twist"
-    bl_label       = "Amend Foot Twist"
-    bl_description = "Amend foot twist by rotating the front or heel areas"
-    bl_options     = {'REGISTER', 'UNDO'}
-
-    falloff = bpy.props.FloatProperty(
-        description = "Twist effect falloff",
-        name        = "Falloff",
-        subtype     = 'FACTOR',
-        default     = 0.25,
-        min         = 0.0,
-        max         = 1.0,
-        update      = update_twist
-    )
- 
-    @classmethod
-    def poll( self, context ):
-        ''' Only works with selected MESH type objects '''
-        if context.object:
-            return context.object.type == 'MESH' and context.object.select
-        else:
-            return False
-
-    def draw( self, context ):
-        """ Draw operator's props """
-        layout = self.layout
-        c      = layout.column()
-        r      = c.row()
-
-        r.prop( self, 'twist_area' )
-        r.prop( self, 'area_size'  )
-        r.prop( self, 'falloff'    )
-
-        def execute( self, context ):
-        ''' Preview the aread of the heel to be and the straightening line '''
-
-        o     = context.object
-        props = context.scene.insole_properties
-        
-        # Select area
-        
-        return {'FINISHED'}
-
 class create_insole_from_curve( bpy.types.Operator ):
     """ Create mesh insole object from curve and scan """
     bl_idname      = "object.trim_insole"
@@ -1433,14 +1388,14 @@ class insole_props( bpy.types.PropertyGroup ):
     )
 
     twist_area = bpy.props.EnumProperty(
-        name    = "twist_area",
+        name    = "Area",
         items   = [('Front', 'Front', ''), ('Heel', 'Heel', '')], 
         default = 'Front'
     )
 
     twist_angle = bpy.props.FloatProperty(
-        description = "Size of the twisted area",
-        name        = "Twisted Area Size",
+        description = "Twist angle",
+        name        = "Angle",
         subtype     = 'ANGLE',
         default     = 0,
         min         = -180.0,
@@ -1450,7 +1405,7 @@ class insole_props( bpy.types.PropertyGroup ):
 
     prop_falloff = bpy.props.FloatProperty(
         description = "Falloff area for proportional transformations",
-        name        = "Proportional Falloff",
+        name        = "Falloff",
         subtype     = 'FACTOR',
         default     = 0.25,
         min         = 0.0,
