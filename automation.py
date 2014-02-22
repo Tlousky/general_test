@@ -1133,6 +1133,8 @@ class create_front_controls( bpy.types.Operator ):
         obj   = context.scene.objects[ context.object.name ]
         props = context.scene.insole_properties
 
+        bpy.ops.view3d.snap_cursor_to_center()
+        
         # Create lattice
         bpy.ops.object.add( type='LATTICE' )
         
@@ -1208,28 +1210,47 @@ class create_front_controls( bpy.types.Operator ):
         
         # Deselect all lattice points
         bpy.ops.lattice.select_all( action = 'DESELECT' )
+
+        max_y = max_x = -10000
+        min_x = 10000
+        
+        for i,p in enumerate( lattice.data.points ):
+            co = p.co * lattice.matrix_world
+            if co.y > max_y: max_y = round( co.y, 2 )
+            if co.x > max_x: max_x = round( co.x, 2 )
+            if co.x < min_x: min_x = round( co.x, 2 )
         
         # Select frontmost two points at center
         all_points = { 'front' : [], 'left' : [], 'right' : [] }
         for i,p in enumerate( lattice.data.points ):
-            if p.co.y == 0.5 and p.co.z = 0.0: 
-                points['front'].append( i )
-            elif p.co.x == 0.5 and p.co.y == 0.5:
-                points['right'].append( i )
-            elif p.co.x == -0.5 and p.co.y == 0.5:
-                points['left'].append( i )
+            co = p.co * lattice.matrix_world
+            top_y  = round( co.y ) == max_y
+            left   = round( co.x ) == min_x
+            right  = round( co.x ) == max_x
+            center = round( co.x ) == round( ( max_x - min_x ) / 2, 2 )
+            if top_y and center: 
+                all_points['front'].append( i )
+            elif top_y and right:
+                all_points['right'].append( i )
+            elif max_y and left:
+                all_points['left'].append( i )
 
         hooks = {}
         for pdir in all_points.keys():
             points = all_points[ pdir ]
-            hook   = self.create_empty( context )
+            hook   = self.create_empty( context, lattice, points )
             hooks[ pdir ] = hook
 
-            self.hook_lattice_to_empty( context, empty, lattice, points )
+            self.hook_lattice_to_empty( context, hook, lattice, points )
             
         return hooks
 
-    def create_empty( self, context ):
+    def create_empty( self, context, lattice, points ):
+        # Select points
+        bpy.ops.lattice.select_all( action = 'DESELECT' )
+        for p in points: 
+            lattice.data.points[ p ].select = True
+
         # Move cursor to selected
         bpy.ops.view3d.snap_cursor_to_selected()
         
@@ -1261,7 +1282,8 @@ class create_front_controls( bpy.types.Operator ):
         
         # Create hook modifier for the selected point
         bpy.ops.lattice.select_all( action = 'DESELECT' )
-        for p in points: lattice.data.points[ p ].select = True
+        for p in points: 
+            lattice.data.points[ p ].select = True
         
         bpy.ops.object.hook_add_selob()
             
