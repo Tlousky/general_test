@@ -91,7 +91,7 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'ALIGN'
         )
 
-        ## Flatten Front props and operators
+        # Flatten Front props and operators
         b = col.box()
         bc = b.column()
         
@@ -123,7 +123,7 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'MOD_SMOOTH'
         )
 
-        ## Create curves and Trim Insole
+        # Create curves and Trim Insole
         b  = col.box()
         bc = b.column()
         l  = bc.label( "Add outline curve" )
@@ -147,10 +147,10 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'CURVE_DATA'
         )
 
-        ## Heel fixing props and operators
+        # Heel fixing props and operators
         b  = col.box()
         bc = b.column()
-        l  = bc.label( "Fix Heel and Finish Insole" )
+        l  = bc.label( "Fix Heel Geometry" )
         r  = bc.row()
 
         r.operator(
@@ -175,13 +175,25 @@ class insole_automation_tools( bpy.types.Panel ):
         bc.prop( context.scene.insole_properties, 'heel_factor'  )
 
         # Twist correction props and operators
-        col.operator( 
-            'object.create_twist_armature',
-            text = 'Create twist controls',
-            icon = 'MOD_SIMPLEDEFORM'
-        )        
+        b  = col.box()
+        bc = b.column()
+        l  = bc.label( "Fix twisted foot areas" )
+        r  = bc.row()
         
-        ## Final Insole creation params and operators
+        r.prop( context.scene.insole_properties, 'twist_area' )
+        
+        ta = context.scene.insole_properties.twist_area
+        
+        if ta == 'Front':
+            bc.prop( context.scene.insole_properties, 'flat_area' )
+        else:
+            bc.prop( context.scene.insole_properties, 'heel_area' )
+
+        r.prop( context.scene.insole_properties, 'prop_falloff' )
+        
+        bc.prop( context.scene.insole_properties, 'twist_angle' )
+        
+        # Final Insole creation params and operators
         b  = col.box()
         bc = b.column()
 
@@ -928,13 +940,23 @@ class preview_heel( bpy.types.Operator ):
         
         return {'FINISHED'}
 
-class create_twist_armature( bpy.types.Operator ):
+class amend_foot_twist( bpy.types.Operator ):
     """ Preview the heel area to be straightened """
-    bl_idname      = "object.create_twist_armature"
-    bl_label       = "Create twist controls"
-    bl_description = "Create twist controls"
+    bl_idname      = "object.amend_foot_twist"
+    bl_label       = "Amend Foot Twist"
+    bl_description = "Amend foot twist by rotating the front or heel areas"
     bl_options     = {'REGISTER', 'UNDO'}
 
+    falloff = bpy.props.FloatProperty(
+        description = "Twist effect falloff",
+        name        = "Falloff",
+        subtype     = 'FACTOR',
+        default     = 0.25,
+        min         = 0.0,
+        max         = 1.0,
+        update      = update_twist
+    )
+ 
     @classmethod
     def poll( self, context ):
         ''' Only works with selected MESH type objects '''
@@ -943,87 +965,25 @@ class create_twist_armature( bpy.types.Operator ):
         else:
             return False
 
-    def create_vertex_groups( self, context, scan, arm ):
-        ''' Create a vertex_group in the scan object for each
-            bone in the armature
-        '''
-        # Go to object mode
-        bpy.ops.object.mode_set(mode = 'OBJECT') 
-        
-        # Deselect all objects
-        bpy.ops.object.select_all( action = 'DESELECT' )
-        
-        # Select and activate scan obj
-        scan.select = True
-        context.scene.objects.active = scan
-        
-        # Create a vgroup for each bone
-        for b in arm.data.bones:
-            bpy.ops.object.mode_set(mode = 'OBJECT')
+    def draw( self, context ):
+        """ Draw operator's props """
+        layout = self.layout
+        c      = layout.column()
+        r      = c.row()
 
-            # Check if the vertex group already exists
-            if b.name not in scan.vertex_groups.keys():
-                # Add vertex group
-                bpy.ops.object.vertex_group_add()
-                
-                # vgroup.name = bone.name
-                scan.vertex_groups[-1].name = b.name
+        r.prop( self, 'twist_area' )
+        r.prop( self, 'area_size'  )
+        r.prop( self, 'falloff'    )
 
-    def create_weight_maps( self, context, scan, arm ):
-        ''' Create the weight maps 
-        vertex.groups[0].group
-        vertex.groups[0].weight
-        '''
-
-        vertex_map = {}
-        
-        # for v in scan.data.vertices:
-            
-
-        pass
-
-    def execute( self, context ):
+        def execute( self, context ):
         ''' Preview the aread of the heel to be and the straightening line '''
 
-        o = context.scene.objects[ context.object.name ]
-
-        # Find front and rear vertices on scan        
-        rear  = -1
-        front = -1
-        least = 10000
-        top   = -10000
-
-        for v in o.data.vertices:
-            if v.co.y > top:
-                top = v.co.y
-                front = v.index
-            if v.co.y < least:
-                least = v.co.y
-                rear = v.index
-
-        v_rear  = o.data.vertices[ rear  ].co
-        v_front = o.data.vertices[ front ].co
-
-        head = ( o.location.x, v_rear.y,  o.location.z )
-        tail = ( o.location.x, v_front.y, v_front.z    )
-
-        # Create armature
-        bpy.ops.object.armature_add( enter_editmode = True )
+        o     = context.object
+        props = context.scene.insole_properties
         
-        a = context.scene.objects[ context.object.name ] # Armature
-        b = a.data.edit_bones[0]                         # Bone
-        
-        b.head = head
-        b.tail = tail
-        
-        b.select = True
-        
-        bpy.ops.armature.subdivide( number_cuts = 2 ) # Subdivide bone
-        
-        self.create_vertex_groups( context, o, a ) # Create vertex groups
+        # Select area
         
         return {'FINISHED'}
-
 
 class create_insole_from_curve( bpy.types.Operator ):
     """ Create mesh insole object from curve and scan """
@@ -1181,7 +1141,7 @@ class insole_props( bpy.types.PropertyGroup ):
             
         return closest_vert
 
-    def select_area( self, context, area_type = 'flat', mat_idx = -1 ):
+    def select_area( self, context, area_type = 'flat' ):
         ''' Select the flat area as defined by the % in the flat area property '''
 
         o     = context.object
@@ -1248,14 +1208,6 @@ class insole_props( bpy.types.PropertyGroup ):
         if area_type == 'non_heel':
             bpy.ops.mesh.select_all( action = 'INVERT' )
 
-        # Paint verts if material slot index provided
-        # TODO: move this back to update_materials
-        if mat_idx != -1:
-            o.active_material_index = mat_idx
-            bpy.ops.object.mode_set( mode = 'OBJECT' )
-            bpy.ops.object.mode_set( mode = 'EDIT' )
-            bpy.ops.object.material_slot_assign()
-
         if area_type == 'heel':
             return idx2
         else:
@@ -1320,7 +1272,12 @@ class insole_props( bpy.types.PropertyGroup ):
                     if ms.material and ms.material.name == mat_refs[ m ].name:
                         mi = i
             
-            self.select_area( context, m, mi ) # Select current area's vertices
+            self.select_area( context, m ) # Select current area's vertices
+            
+            o.active_material_index = mi
+            bpy.ops.object.mode_set( mode = 'OBJECT' )
+            bpy.ops.object.mode_set( mode = 'EDIT' )
+            bpy.ops.object.material_slot_assign()
 
     def update_materials( self, context ):
         ''' Update visual preview of flattenning effect '''
@@ -1370,6 +1327,55 @@ class insole_props( bpy.types.PropertyGroup ):
 
         bpy.ops.object.mode_set(mode ='OBJECT')
 
+    def proportional_transform( 
+        self, context, area, vector, action = 'translate'
+    ):
+        ''' performs a proportional transformation of a group of vertices '''
+
+        o       = context.object
+        falloff = self.falloff
+        
+        self.select_area( context, area ) # select area
+        
+        constraint_axis = tuple( [ x != 0 for x in vector ] )
+        
+        if action == 'translate':
+            bpy.ops.transform.translate(
+                value                     = vector, 
+                constraint_axis           = constraint_axis,
+                proportional              = 'ENABLED', 
+                proportional_edit_falloff = 'SMOOTH',
+                proportional_size         = o.dimensions.y * self.falloff
+            )
+            
+        elif action == 'rotate':
+            bpy.ops.transform.rotate(
+                value                     = vector, 
+                constraint_axis           = constraint_axis,
+                proportional              = 'ENABLED', 
+                proportional_edit_falloff = 'SMOOTH',
+                proportional_size         = o.dimensions.y * self.falloff
+            )
+        
+    def update_twist( self, context ):
+        ''' rotate front or heel area (twist_area) proportionally.
+            uses twist_angle as proportional size
+        '''
+        o       = context.object
+        falloff = self.prop_falloff
+
+        vector = ( 0, self.twist_angle, 0 )
+
+        area_dict = { 'Front' : 'flat', 'Heel' : 'heel' }
+        
+        self.proportional_transform( 
+            context, area_dict[ self.twist_area ], vector, 'rotate'
+        )
+
+    def update_empty( self, context ):
+        ''' updates when the empty is moved and with it, the area '''
+        pass
+        
     decimate_faces = bpy.props.IntProperty(
         description = "Number of faces to keep",
         name        = "Resolution",
@@ -1426,7 +1432,32 @@ class insole_props( bpy.types.PropertyGroup ):
         max         = 100.0
     )
 
+    twist_area = bpy.props.EnumProperty(
+        name    = "twist_area",
+        items   = [('Front', 'Front', ''), ('Heel', 'Heel', '')], 
+        default = 'Front'
+    )
 
+    twist_angle = bpy.props.FloatProperty(
+        description = "Size of the twisted area",
+        name        = "Twisted Area Size",
+        subtype     = 'ANGLE',
+        default     = 0,
+        min         = -180.0,
+        max         = 180.0,
+        update      = update_twist
+    )
+
+    prop_falloff = bpy.props.FloatProperty(
+        description = "Falloff area for proportional transformations",
+        name        = "Proportional Falloff",
+        subtype     = 'FACTOR',
+        default     = 0.25,
+        min         = 0.0,
+        max         = 1.0
+    )
+    
+    
 right_foot_insole_curve_coordinates = [
   {
     "rh": {
