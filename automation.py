@@ -13,7 +13,7 @@ bl_info = {
     "description" : "Insole preperation automation script"
 }
 
-import bpy, bmesh, json
+import bpy, bmesh, json, math
 from mathutils    import Color
 
 # Constants
@@ -1307,7 +1307,7 @@ class insole_props( bpy.types.PropertyGroup ):
             twist_amount = vector[1] - self.cumulative_twist
 
             bpy.ops.transform.rotate(
-                value                     = vector[1], 
+                value                     = twist_amount, 
                 axis                      = ( 0.0, 1.0, 0.0 ),
                 constraint_axis           = ( False, True, False ),
                 proportional              = 'ENABLED', 
@@ -1316,9 +1316,26 @@ class insole_props( bpy.types.PropertyGroup ):
             )
             
             self.cumulative_twist += twist_amount
-
-        bpy.ops.object.mode_set(mode ='OBJECT') # Return to object mode
             
+        bpy.ops.object.mode_set(mode ='OBJECT') # Return to object mode
+
+    def update_twist_area( self, context ):
+        ''' rotate front or heel area (twist_area) proportionally.
+            uses twist_angle as proportional size
+        '''
+        o       = context.object
+        falloff = self.prop_falloff
+
+        # Reset twist property values
+        self.cumulative_twist = 0.0
+        self.twist_angle      = 0.0
+        
+        if self.twist_area == 'Heel':
+            self.update_heel_materials( context )
+        elif self.twist_area == 'Front':
+            self.update_materials( context )
+            
+        
     def update_twist( self, context ):
         ''' rotate front or heel area (twist_area) proportionally.
             uses twist_angle as proportional size
