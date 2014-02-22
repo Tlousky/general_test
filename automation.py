@@ -1291,7 +1291,7 @@ class insole_props( bpy.types.PropertyGroup ):
         falloff = self.falloff
         
         self.select_area( context, area ) # select area
-        
+
         constraint_axis = tuple( [ x != 0 for x in vector ] )
         
         if action == 'translate':
@@ -1300,18 +1300,25 @@ class insole_props( bpy.types.PropertyGroup ):
                 constraint_axis           = constraint_axis,
                 proportional              = 'ENABLED', 
                 proportional_edit_falloff = 'SMOOTH',
-                proportional_size         = o.dimensions.y * self.falloff
+                proportional_size         = o.dimensions.y * self.prop_falloff
             )
             
         elif action == 'rotate':
+            twist_amount = vector[1] - self.cumulative_twist
+
             bpy.ops.transform.rotate(
-                value                     = vector, 
-                constraint_axis           = constraint_axis,
+                value                     = vector[1], 
+                axis                      = ( 0.0, 1.0, 0.0 ),
+                constraint_axis           = ( False, True, False ),
                 proportional              = 'ENABLED', 
                 proportional_edit_falloff = 'SMOOTH',
-                proportional_size         = o.dimensions.y * self.falloff
+                proportional_size         = o.dimensions.y * self.prop_falloff
             )
-        
+            
+            self.cumulative_twist += twist_amount
+
+        bpy.ops.object.mode_set(mode ='OBJECT') # Return to object mode
+            
     def update_twist( self, context ):
         ''' rotate front or heel area (twist_area) proportionally.
             uses twist_angle as proportional size
@@ -1326,7 +1333,7 @@ class insole_props( bpy.types.PropertyGroup ):
         self.proportional_transform( 
             context, area_dict[ self.twist_area ], vector, 'rotate'
         )
-
+        
     def update_empty( self, context ):
         ''' updates when the empty is moved and with it, the area '''
         pass
@@ -1401,6 +1408,13 @@ class insole_props( bpy.types.PropertyGroup ):
         min         = -180.0,
         max         = 180.0,
         update      = update_twist
+    )
+    
+    cumulative_twist = bpy.props.FloatProperty(
+        description = "Twist angle",
+        name        = "Angle",
+        subtype     = 'ANGLE',
+        default     = 0.0
     )
 
     prop_falloff = bpy.props.FloatProperty(
