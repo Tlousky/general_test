@@ -116,11 +116,18 @@ class insole_automation_tools( bpy.types.Panel ):
         
         bc.prop( context.scene.insole_properties, 'flat_area' )
         bc.prop( context.scene.insole_properties, 'falloff'   )
-        
-        col.operator( 
+
+        r = col.row()        
+        r.operator( 
             'object.smooth_verts',
             text = 'Smooth object',
             icon = 'MOD_SMOOTH'
+        )
+
+        r.operator( 
+            'object.fill_insole_holes',
+            text = 'Fill holes',
+            icon = 'MESH_CIRCLE'
         )
 
         # Create curves and Trim Insole
@@ -132,13 +139,13 @@ class insole_automation_tools( bpy.types.Panel ):
         r.operator( 
             'object.create_and_fit_curve',
             text = 'Left foot',
-            icon = 'TRIA_LEFT'
+            icon = 'LOOP_BACK'
         ).direction = 'L'
         
         r.operator( 
             'object.create_and_fit_curve',
             text = 'Right foot',
-            icon = 'TRIA_RIGHT'
+            icon = 'LOOP_FORWARDS'
         ).direction = 'R'
 
         r  = bc.row()
@@ -1099,19 +1106,87 @@ class fill_holes( bpy.types.Operator ):
         else:
             return False
 
+    def find_next_linked_vert( self, context, edges, selected, loop, i ):
+        loop.append( i )
+        # Remove documented verts from lookup verts
+        the_rest = selected - set( loop )
+
+        for j in the_rest:
+            shared_edges = [ 
+                e for e in edges if j in edges[e] and i in edges[e]
+            ]
+
+            if len( shared_edges ) > 0:
+                    # Then the lookup vert and this vert have a common edge.
+                    # And if so, call this function again with this vert
+                    self.find_next_linked_vert( 
+                        context, edges, selected, loop, j 
+                    )
+
+        return loop
+
     def execute( self, context ):
         ''' Select non-manifold geometry and beauty fill holes '''
+        o = context.object
+
         # 1. Go to edit mode and create bmesh object
         if o.mode != 'EDIT': bpy.ops.object.mode_set(mode = 'EDIT')
-        
-        bpy.ops.mesh.select_all( action = 'DESELECT' ) # Deselect all vertices
+
+        # Go to vertex selection mode and deselect all verts
+        bpy.ops.mesh.select_mode( type  = 'VERT'     )
+        bpy.ops.mesh.select_all( action = 'DESELECT' )
 
         # Select non manifold geometry (outline verts)
         bpy.ops.mesh.select_non_manifold()
+        # This selects all the inner holes and the outer rim loop
+        # Must deselect he outer rim or it will be filled as well
 
-        # Beauty-fill selected mesh
-        bpy.ops.mesh.beauty_fill()
-        
+        bm = bmesh.from_edit_mesh( o.data )        
+
+        edges = { e.index : [ v.index for v in e.verts ] for e in bm.edges }
+
+        selected_verts = [ v.index for v in bm.verts if v.select ]
+
+        # Find the vert with the highest Y value (which must be on the rim)
+        max_y     = -10000
+        topy_vert = -1
+        for i in selected_verts:
+            co = bm.verts[i].co * o.matrix_world
+            if co.y > max_y:
+                max_y = co.y
+                topy_vert = i
+
+        selected_set = set( selected_verts )
+        loop_verts = []
+
+        # Call recursive function with the highest-y vert as first input
+        # to find the outer-rim loop
+        loop = self.find_next_linked_vert( 
+            context, edges, selected_set, loop_verts, topy_vert 
+        )
+
+        '''
+        # Deselect the outer rim verts
+        for i in loop:
+            bm.verts[ i ].select = False
+
+        bm.select_flush( True )        
+        '''
+
+        bpy.ops.object.mode_set(mode = 'OBJECT')
+        for i in loop:
+            o.data.vertices[ i ].select = False
+
+        bpy.ops.object.mode_set(mode = 'EDIT'  )
+
+        '''
+        # Fill holes and triangulate
+        bpy.ops.mesh.fill()
+        bpy.ops.mesh.quads_convert_to_tris()
+
+        bpy.ops.object.mode_set(mode = 'OBJECT')
+        '''
+
         return {'FINISHED'}
             
 class create_front_controls( bpy.types.Operator ):
