@@ -1,4 +1,6 @@
-﻿bl_info = {    
+﻿# Author: Tamir Lousky
+
+bl_info = {    
     "name"        : "Insole 3D Printing",
     "author"      : "Tamir Lousky",
     "version"     : (0, 0, 2),
@@ -245,7 +247,7 @@ class insole_automation_tools( bpy.types.Panel ):
 
         bc.operator(
             'object.create_insole_cast',
-            text = 'Undo',
+            text = 'Create CNC Cast',
             icon = 'MOD_CAST'
         )
 
@@ -1802,8 +1804,10 @@ class create_insole_cast( bpy.types.Operator ):
            
         obj_names = [ o.name for o in context.selected_objects ]
         for oname in obj_names:
-            o = context.scene.objects[ oname ]
-            
+            o = context.scene.objects[ oname ]        
+
+            bpy.ops.object.mode_set( mode = 'OBJECT' )
+                   
             bpy.ops.object.select_all( action = 'DESELECT' )
             
             o.select = True
@@ -1831,6 +1835,7 @@ class create_insole_cast( bpy.types.Operator ):
                 self.insole_L = o.name
 
         # Create cast block
+        bpy.ops.object.mode_set( mode = 'OBJECT' )
         bpy.ops.mesh.primitive_cube_add()
 
         # Store name and reference object
@@ -1847,6 +1852,8 @@ class create_insole_cast( bpy.types.Operator ):
         """ Pre boolean positioning and preparation """
 
         for name in [ self.insole_R, self.insole_L ]:
+            bpy.ops.object.mode_set( mode = 'OBJECT' )
+
             o = context.scene.objects[ name ]
 
             # Select and activate only current insole object
@@ -1868,7 +1875,7 @@ class create_insole_cast( bpy.types.Operator ):
             
             maxZ = -10000
             for v in bm.verts:
-                if v.co.z > maxZ: maxZ = co.x
+                if v.co.z > maxZ: maxZ = v.co.z
 
             bpy.ops.mesh.select_all( action = 'DESELECT' ) # Deselect all verts
             maxZ = round( maxZ, 2 ) # Round Z value to 2 points
@@ -1897,7 +1904,7 @@ class create_insole_cast( bpy.types.Operator ):
             bpy.ops.object.mode_set(  mode = 'EDIT' )
             bpy.ops.mesh.select_mode( type = 'FACE' )
             
-            bm = bmesh.from_edit_mesh( o.data ) # Create bmesh object
+            bm = bmesh.from_edit_mesh( cast.data ) # Create bmesh object
             
             # Select top face (all verts located at object's top Z value)
             for v in bm.verts:
@@ -1909,7 +1916,8 @@ class create_insole_cast( bpy.types.Operator ):
             bm.select_flush( True )
             
             bpy.ops.view3d.snap_cursor_to_selected() # Cursor to selected
-            
+
+            bpy.ops.object.mode_set(   mode   = 'OBJECT'   )
             bpy.ops.object.select_all( action = 'DESELECT' )
             o.select = True
             context.scene.objects.active = o
