@@ -747,6 +747,9 @@ class create_and_fit_curve( bpy.types.Operator ):
         name  = 'insole_curve.' + self.direction
 
         bpy.ops.object.clear_materials()
+
+        # Add hooks to front of mesh using the operator
+        bpy.ops.object.create_front_controls()
         
         # 1. create curve
         curve = self.make_curve( 
@@ -806,10 +809,7 @@ class create_and_fit_curve( bpy.types.Operator ):
         
         # Create hooks on each of the curve's points
         self.create_hooks( context, curve )
-        
-        # Add hooks to front of mesh using the operator
-        bpy.ops.object.create_front_controls()
-        
+               
         return {'FINISHED'}
 
 class create_front_controls( bpy.types.Operator ):
