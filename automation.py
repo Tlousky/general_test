@@ -35,23 +35,42 @@ class insole_automation_tools( bpy.types.Panel ):
         layout = self.layout
         col    = layout.column()
 
+        # File Imports
+        b = col.box()
+        bc = b.column()
+        
+        r = bc.row()
+
         # Import STL
-        r = col.row()
         r.operator(
             'object.import_insole_stl',
             text = 'Import STL file',
             icon = 'IMPORT'
         )
 
+        # Import OBJ
         r.operator(
             'import_scene.obj',
             text = 'Import OBJ file',
             icon = 'IMPORT'
         )
 
-        r = col.row()
+        # Cleanups
+        b = col.box()
+        bc = b.column()
+               
+        # Reduce polycount
+        r = bc.row()
+        r.operator( 
+            'object.decimate_object',
+            text = 'Compress model',
+            icon = 'MOD_DECIM'
+        )
 
+        r.prop( context.scene.insole_properties, 'decimate_faces' )
+        
         # Clean mesh
+        r = bc.row()
         r.operator( 
             'object.perform_cleanup',
             text = 'Perform Cleanup',
@@ -64,21 +83,11 @@ class insole_automation_tools( bpy.types.Panel ):
             text = 'Clear materials',
             icon = 'MATERIAL'
         )
-        
-        # Reduce polycount
-        r = col.row()
-        r.operator( 
-            'object.decimate_object',
-            text = 'Compress model',
-            icon = 'MOD_DECIM'
-        )
-
-        r.prop( context.scene.insole_properties, 'decimate_faces' )
 
         # Orientation buttons box
         b  = col.box()
         bc = b.column()
-        l = bc.label( "Scan orientation buttons" )
+        l = bc.label( "Scan orientation" )
 
         r  = bc.row()        
 
@@ -107,6 +116,25 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'ALIGN'
         )
 
+        # Twist correction props and operators
+        b  = col.box()
+        bc = b.column()
+        l  = bc.label( "Fix twisted foot areas" )
+       
+        bc.prop( context.scene.insole_properties, 'twist_area' )
+        
+        ta = context.scene.insole_properties.twist_area
+        r  = bc.row()
+        
+        if ta == 'Front':
+            r.prop( context.scene.insole_properties, 'flat_area'          )
+            r.prop( context.scene.insole_properties, 'falloff'            )
+        else:
+            r.prop( context.scene.insole_properties, 'heel_area'          )
+            r.prop( context.scene.insole_properties, 'heel_twist_falloff' )
+        
+        bc.prop( context.scene.insole_properties, 'twist_angle' )
+        
         # Flatten Front props and operators
         b = col.box()
         bc = b.column()
@@ -183,39 +211,28 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'BACK'
         )
         
-        # Twist correction props and operators
-        b  = col.box()
-        bc = b.column()
-        l  = bc.label( "Fix twisted foot areas" )
-       
-        bc.prop( context.scene.insole_properties, 'twist_area' )
-        
-        ta = context.scene.insole_properties.twist_area
-        r  = bc.row()
-        
-        if ta == 'Front':
-            r.prop( context.scene.insole_properties, 'flat_area'          )
-            r.prop( context.scene.insole_properties, 'falloff'            )
-        else:
-            r.prop( context.scene.insole_properties, 'heel_area'          )
-            r.prop( context.scene.insole_properties, 'heel_twist_falloff' )
-        
-        bc.prop( context.scene.insole_properties, 'twist_angle' )
-        
         # Final Insole creation params and operators
         b  = col.box()
         bc = b.column()
 
         bc.label( "Create finished Insole" )
-        bc.prop( context.scene.insole_properties, 'insole_thickness' )
-        
         r = bc.row()
+
         r.operator( 
             'object.create_insole',
             text = 'Create Insole',
             icon = 'PARTICLES'
         )
+
+        r.prop( context.scene.insole_properties, 'insole_thickness' )
         
+        r = bc.row()
+        r.operator( 
+            'export_mesh.stl',
+            text = 'Save',
+            icon = 'SAVE_AS'
+        )
+
         r.operator(
             'ed.undo',
             text = 'Undo',
@@ -1652,7 +1669,7 @@ class insole_props( bpy.types.PropertyGroup ):
     decimate_faces = bpy.props.IntProperty(
         description = "Number of faces to keep",
         name        = "Resolution",
-        default     = 20000,
+        default     = 30000,
         min         = 10000,
         max         = 40000
     )
