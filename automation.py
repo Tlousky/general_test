@@ -163,7 +163,8 @@ class insole_automation_tools( bpy.types.Panel ):
             text = 'Right foot',
             icon = 'LOOP_FORWARDS'
         ).direction = 'R'
-      
+
+        r  = bc.row()        
         r.operator( 
             'object.trim_insole',
             text = 'Trim Insole',
