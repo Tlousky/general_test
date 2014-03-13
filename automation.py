@@ -136,7 +136,7 @@ class insole_automation_tools( bpy.types.Panel ):
         r = col.row()        
         r.operator( 
             'object.smooth_verts',
-            text = 'Smooth object',
+            text = 'Smooth',
             icon = 'MOD_SMOOTH'
         )
 
@@ -146,6 +146,12 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'MESH_CIRCLE'
         )
 
+        r.operator( 
+            'object.quick_remove_excess',
+            text = 'Remove excess',
+            icon = 'BORDER_LASSO'
+        )
+        
         # Create curves and Trim Insole
         b  = col.box()
         bc = b.column()
@@ -1248,6 +1254,48 @@ class fill_holes( bpy.types.Operator ):
 
         return {'FINISHED'}
 
+class remove_excess( bpy.types.Operator ):
+    """ Clear all materials assigned to active object """
+    bl_idname      = "object.quick_remove_excess"
+    bl_label       = "Remove Excess"
+    bl_description = "Launch tools for quick removal of excess geometry"
+    bl_options     = {'REGISTER'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with selected MESH type objects '''
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
+
+    def execute( self, context ):
+        # Go to edit mode and deselect all verts
+        bpy.ops.object.mode_set( mode   = 'EDIT'     )
+
+        # Go to vertex selection mode
+        bpy.ops.mesh.select_mode(type='VERT')
+
+        # Deselect all verts
+        bpy.ops.mesh.select_all( action = 'DESELECT' )
+        
+        ## Set view to wirefame mode
+        # Find 3D View area in default screen
+        area_3dv = [ 
+            a for a in bpy.data.screens["Default"].areas if a.type == 'VIEW_3D' 
+        ].pop()
+
+        # Find 3D View space in 3D View Area
+        space_3dv = [ s for s in area_3dv.spaces if s.type == 'VIEW_3D' ].pop()
+        
+        # Set shading mode to wireframe
+        space_3dv.viewport_shade = 'WIREFRAME'
+        
+        # Go to circular selection mode
+        bpy.ops.view3d.select_circle()
+        
+        return {'FINISHED'}
+        
 class create_insole( bpy.types.Operator ):
     """ Create mesh insole object from cleaned mesh """
     bl_idname      = "object.create_insole"
