@@ -1,10 +1,7 @@
-﻿# Author: Tamir Lousky
-# Updated: 23Jan2014
-
-bl_info = {    
+﻿bl_info = {    
     "name"        : "Insole 3D Printing",
     "author"      : "Tamir Lousky",
-    "version"     : (0, 0, 1),
+    "version"     : (0, 0, 2),
     "blender"     : (2, 69, 0),
     "category"    : "Object",
     "location"    : "3D View >> Tools",
@@ -239,6 +236,20 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'BACK'
         )
 
+        # Create Cast
+        s = col.separator()
+        b  = col.box()
+        bc = b.column()
+
+        bc.label( "Create CNC cast from two Insoles" )
+
+        bc.operator(
+            'object.create_insole_cast',
+            text = 'Undo',
+            icon = 'MOD_CAST'
+        )
+
+        
 class import_insole_stl( bpy.types.Operator ):
     """ Import insole STL file and perform preliminary cleanup and adjustments """
     bl_idname      = "object.import_insole_stl"
@@ -1765,6 +1776,188 @@ class insole_props( bpy.types.PropertyGroup ):
         max         = 1.0
     )
 
+class create_insole_cast( bpy.types.Operator ):
+    """ Clear all materials assigned to active object """
+    bl_idname      = "object.create_insole_cast"
+    bl_label       = "Create Cast"
+    bl_description = "Clear CNC cast from imported Insoles"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with exactly two selected MESH type objects '''
+        selobjs         = context.selected_objects
+        selected_meshes = [ o for o in selobjs if o.type == 'MESH' ]
+
+        return len( selected_meshes ) == 2
+
+    insole_R = bpy.props.StringProperty()
+    insole_L = bpy.props.StringProperty()
+    cast     = bpy.props.StringProperty()
+    
+    def create_cast_block( self, context ):
+        """ Create box cast block """
+        
+        # Find and assign left and right insole properties
+           
+        obj_names = [ o.name for o in context.selected_objects ]
+        for oname in obj_names:
+            o = context.scene.objects[ oname ]
+            
+            bpy.ops.object.select_all( action = 'DESELECT' )
+            
+            o.select = True
+            context.scene.objects.active = o
+            
+            bpy.ops.object.mode_set(  mode = 'EDIT' )
+            bpy.ops.mesh.select_mode( type = 'VERT' )
+
+            bm = bmesh.from_edit_mesh( o.data )
+
+            # Find min and max X values
+            minX =  10000
+            maxX = -10000
+            for v in bm.verts:
+                co = v.co * o.matrix_world
+                if co.x < minX: minX = co.x
+                if co.x > maxX: maxX = co.x
+
+            # A right insole is one where the distance between the origin and 
+            # the leftmost (minX) vertex is larger than the distance to the 
+            # rightmost (maxX) vert. The left insole is opposite.
+            if abs( o.location.x - minX ) > abs( o.location.x - maxX ):
+                self.insole_R = o.name
+            else:
+                self.insole_L = o.name
+
+        # Create cast block
+        bpy.ops.mesh.primitive_cube_add()
+
+        # Store name and reference object
+        self.cast = context.object.name
+        cast      = context.scene.objects[ self.cast ]
+        
+        # Set dimensions    x    y    z 
+        cast.dimensions = ( 240, 330, 40 )        
+        
+        # Apply transformations (scale)
+        bpy.ops.object.transform_apply( scale = True )
+        
+    def prepare_insoles( self, context ): 
+        """ Pre boolean positioning and preparation """
+
+        for name in [ self.insole_R, self.insole_L ]:
+            o = context.scene.objects[ name ]
+
+            # Select and activate only current insole object
+            bpy.ops.object.select_all( action = 'DESELECT' )
+            o.select = True
+            context.scene.objects.active = o            
+            
+            # Flip object
+            bpy.ops.transform.rotate(value = math.radians(180), axis = (0,1,0) )
+            
+            # Apply rotation
+            bpy.ops.object.transform_apply( rotation = True )
+            
+            # Select top verts
+            bpy.ops.object.mode_set(  mode = 'EDIT' )
+            bpy.ops.mesh.select_mode( type = 'VERT' )
+
+            bm = bmesh.from_edit_mesh( o.data ) # Create bmesh object
+            
+            maxZ = -10000
+            for v in bm.verts:
+                if v.co.z > maxZ: maxZ = co.x
+
+            bpy.ops.mesh.select_all( action = 'DESELECT' ) # Deselect all verts
+            maxZ = round( maxZ, 2 ) # Round Z value to 2 points
+                
+            for v in bm.verts:
+                if round( v.co.z, 2 ) == maxZ: v.select = True
+                
+            bm.select_flush( True )
+            
+            # Snap cursor to selection
+            bpy.ops.view3d.snap_cursor_to_selected()
+            
+            # Delete faces
+            bpy.ops.mesh.delete( type = 'FACE' )
+            
+            # Place origin at cursor location
+            bpy.ops.object.mode_set(   mode = 'OBJECT'        )
+            bpy.ops.object.origin_set( type = 'ORIGIN_CURSOR' )
+            
+            # Snap insole to top of cast face
+            cast = context.scene.objects[ self.cast ]
+            bpy.ops.object.select_all( action = 'DESELECT' )
+            cast.select = True
+            context.scene.objects.active = cast
+            
+            bpy.ops.object.mode_set(  mode = 'EDIT' )
+            bpy.ops.mesh.select_mode( type = 'FACE' )
+            
+            bm = bmesh.from_edit_mesh( o.data ) # Create bmesh object
+            
+            # Select top face (all verts located at object's top Z value)
+            for v in bm.verts:
+                co = v.co * cast.matrix_world
+                if round( co.z, 2 ) == \
+                   round( cast.location.z + cast.dimensions.z / 2, 2):
+                    v.select = True
+            
+            bm.select_flush( True )
+            
+            bpy.ops.view3d.snap_cursor_to_selected() # Cursor to selected
+            
+            bpy.ops.object.select_all( action = 'DESELECT' )
+            o.select = True
+            context.scene.objects.active = o
+            
+            bpy.ops.view3d.snap_selected_to_cursor() # Selected to cursor
+            
+            # Select non manifold
+            bpy.ops.object.mode_set(  mode = 'EDIT' )
+            bpy.ops.mesh.select_mode( type = 'VERT' )
+            
+            bpy.ops.mesh.select_non_manifold()
+            
+            # Extrude in place
+            bpy.ops.mesh.extrude_region()
+            
+            # Scale extruded geometry           x    y    z
+            bpy.ops.transform.resize( value = ( 1.3, 1.1, 1 ) )
+            
+            # Expand selection to select ring faces
+            bpy.ops.mesh.select_more()
+            
+            # Extrude up 5mm
+            bpy.ops.mesh.extrude_region_move( 
+                TRANSFORM_OT_translate = { "value" :(0, 0, 5) }
+            )
+            
+            # Select non manifold
+            bpy.ops.mesh.select_non_manifold()
+            
+            # Extrude down by 6 mm
+            bpy.ops.mesh.extrude_region_move( 
+                TRANSFORM_OT_translate = { "value" :(0, 0, -6) }
+            )
+            
+    def create_positive_cast( self, context ):
+        """ Expand insole to create a positive for cast creation """
+        pass
+
+    def create_cast( self, context ):
+        """ Crete finished cast """
+        pass
+
+    def execute( self, context ):
+        self.create_cast_block( context )
+        self.prepare_insoles( context )
+        
+        return {'FINISHED'}
+    
 right_foot_insole_curve_coordinates = [
   {
     "rh": {
