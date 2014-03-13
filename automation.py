@@ -177,33 +177,6 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'CURVE_DATA'
         )
         
-        # Heel fixing props and operators
-        b  = col.box()
-        bc = b.column()
-        l  = bc.label( "Fix Heel Geometry" )
-        r  = bc.row()
-
-        r.operator(
-            'object.fix_insole_heel',
-            text = 'Fix Heel',
-            icon = 'BRUSH_FLATTEN'
-        )
-
-        r.operator( 
-            'object.preview_heel',
-            text = 'Preview',
-            icon = 'PREVIEW_RANGE'
-        )        
-
-        r.operator(
-            'ed.undo',
-            text = 'Undo',
-            icon = 'BACK'
-        )
-
-        bc.prop( context.scene.insole_properties, 'heel_area' )
-        bc.prop( context.scene.insole_properties, 'heel_factor'  )
-
         # Twist correction props and operators
         b  = col.box()
         bc = b.column()
@@ -829,82 +802,6 @@ class create_and_fit_curve( bpy.types.Operator ):
         
         return {'FINISHED'}
 
-class fix_heel( bpy.types.Operator ):
-    """ Create mesh insole object from curve and scan """
-    bl_idname      = "object.fix_insole_heel"
-    bl_label       = "Create Insole"
-    bl_description = "Create Insole from Scan and Outline"
-    bl_options     = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll( self, context ):
-        ''' Only works with selected MESH type objects '''
-        if context.object:
-            return context.object.type == 'MESH' and context.object.select
-        else:
-            return False
-
-    def straighten_heel( self, context ):
-        props = context.scene.insole_properties
-        o     = context.object
-
-        # 1. Go to edit mode and create bmesh object
-        if o.mode != 'EDIT': bpy.ops.object.mode_set(mode = 'EDIT')
-        bm = bmesh.from_edit_mesh( o.data )
-        
-        # Find rearmost vert
-        props.select_area( context, area_type = 'heel' )
-
-        bm.select_flush( True )
-        
-        # Find highest Y amongst selected vertices
-        highest_y = -10000
-        for v in bm.verts:
-            glob_v = v.co * o.matrix_world
-            if glob_v.y > highest_y: highest_y = glob_v.y
-
-        '''
-        # Bisect above designated height
-        bpy.ops.mesh.bisect(
-            plane_co    = ( 0, highest_y, props.heel_top), 
-            plane_no    = ( 0, 0, -1 ),
-            clear_inner = True,
-            use_fill    = True
-        )
-        '''
-        
-        heel_verts = [ v.index for v in bm.verts if v.select ]
-        
-        bpy.ops.mesh.select_all( action = 'DESELECT' ) # Deselect all vertices
-
-        # Select non manifold geometry (outline verts)
-        bpy.ops.mesh.select_non_manifold()
-
-        # Deselect all the verts outside the heel area
-        for v in bm.verts:
-            if v.select and v.index not in heel_verts:
-                v.select = False
-
-        bm.select_flush( True )
-
-        # Straighten in Z axis (Scale to 0 in Z)
-        bpy.ops.transform.resize( 
-            value             = ( 1, 1, 0), 
-            constraint_axis   = ( False, False, True ), 
-            proportional      = 'ENABLED', 
-            proportional_size = props.heel_factor
-        )
-        
-    def execute( self, context ):
-        props = context.scene.insole_properties
-        o     = context.object
-
-        self.straighten_heel( context )
-
-        if o.mode != 'OBJECT': bpy.ops.object.mode_set(mode = 'OBJECT')
-        
-        return {'FINISHED'}
-
 class create_insole( bpy.types.Operator ):
     """ Create mesh insole object from cleaned mesh """
     bl_idname      = "object.create_insole"
@@ -963,29 +860,7 @@ class create_insole( bpy.types.Operator ):
             bpy.ops.object.material_slot_remove()
         
         return {'FINISHED'}
-
-class preview_heel( bpy.types.Operator ):
-    """ Preview the heel area to be straightened """
-    bl_idname      = "object.preview_heel"
-    bl_label       = "Preview Heel Fix"
-    bl_description = "Preview Heel Fix"
-    bl_options     = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll( self, context ):
-        ''' Only works with selected MESH type objects '''
-        if context.object:
-            return context.object.type == 'MESH' and context.object.select
-        else:
-            return False
-
-    def execute( self, context ):
-        ''' Preview the aread of the heel to be and the straightening line '''
-
-        context.scene.insole_properties.update_heel_materials( context )
-        
-        return {'FINISHED'}
-              
+           
 class create_insole_from_curve( bpy.types.Operator ):
     """ Create mesh insole object from curve and scan """
     bl_idname      = "object.trim_insole"
