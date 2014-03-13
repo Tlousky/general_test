@@ -36,19 +36,35 @@ class insole_automation_tools( bpy.types.Panel ):
         col    = layout.column()
 
         # Import STL
-        col.operator( 
+        r = col.row()
+        r.operator(
             'object.import_insole_stl',
             text = 'Import STL file',
             icon = 'IMPORT'
         )
 
+        r.operator(
+            'import_scene.obj',
+            text = 'Import OBJ file',
+            icon = 'IMPORT'
+        )
+
+        r = col.row()
+
         # Clean mesh
-        col.operator( 
-            'object.delete_loose',
+        r.operator( 
+            'object.perform_cleanup',
             text = 'Perform Cleanup',
             icon = 'DRIVER'
         )
 
+        # Clear materials
+        r.operator( 
+            'object.clear_materials',
+            text = 'Clear materials',
+            icon = 'MATERIAL'
+        )
+        
         # Reduce polycount
         r = col.row()
         r.operator( 
@@ -250,7 +266,7 @@ class import_insole_stl( bpy.types.Operator ):
         bpy.ops.view3d.view_selected()
 
         # 4. Launch cleanup operator
-        bpy.ops.object.delete_loose()    
+        bpy.ops.object.perform_cleanup()    
 
         return {'FINISHED'}
 
@@ -276,11 +292,11 @@ class import_insole_stl( bpy.types.Operator ):
         
         return {'RUNNING_MODAL'}
 
-class delete_loose( bpy.types.Operator ):
+class perform_cleanup( bpy.types.Operator ):
     """ Delete vertices not-connected to selected one """
-    bl_idname      = "object.delete_loose"
-    bl_label       = "Delete unconnected vertices"
-    bl_description = "Delete vertices not-connected to selected one"
+    bl_idname      = "object.perform_cleanup"
+    bl_label       = "Perform Cleanup"
+    bl_description = "Perform various cleanups and corrections"
     bl_options     = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -563,6 +579,27 @@ class preview_flatten( bpy.types.Operator ):
         context.scene.insole_properties.update_materials( context )
         return {'FINISHED'}
 
+class clear_materials( bpy.types.Operator ):
+    """ Clear all materials assigned to active object """
+    bl_idname      = "object.clear_materials"
+    bl_label       = "Clear materials"
+    bl_description = "Clear all materials assigned to object"
+    bl_options     = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll( self, context ):
+        ''' Only works with selected MESH type objects '''
+        if context.object:
+            return context.object.type == 'MESH' and context.object.select
+        else:
+            return False
+
+    def execute( self, context ):
+        for i in range( len( context.object.material_slots ) ):
+            bpy.ops.object.material_slot_remove()
+
+        return {'FINISHED'}
+
 class create_and_fit_curve( bpy.types.Operator ):
     """ Creates a curve outline of the final insole shape, and adds some easy
         adjust hooks to fix the shape and fine-tune it
@@ -729,12 +766,7 @@ class create_and_fit_curve( bpy.types.Operator ):
         props = context.scene.insole_properties
         name  = 'insole_curve.' + self.direction
 
-        # Delete all the object's materials
-        bpy.ops.object.select_all( action = 'DESELECT' )
-        o.select = True
-        context.scene.objects.active = o
-        for i in range( len( o.material_slots ) ):
-            bpy.ops.object.material_slot_remove()
+        bpy.ops.object.clear_materials()
         
         # 1. create curve
         curve = self.make_curve( 
@@ -1005,6 +1037,9 @@ class create_insole_from_curve( bpy.types.Operator ):
         scn   = context.scene
         cname = [ o.name for o in scn.objects if 'insole_curve' in o.name ].pop()
         c     = context.scene.objects[ cname ] # Create reference by object name
+
+        # Reference scan object
+        scan = [ o for o in scn.objects if o.type == 'MESH' ].pop()
         
         # Select curve object and set it as active
         bpy.ops.object.select_all( action = 'DESELECT' )
@@ -1014,21 +1049,27 @@ class create_insole_from_curve( bpy.types.Operator ):
         # Apply modifiers on curve        
         for m in c.modifiers: 
             bpy.ops.object.modifier_apply( modifier = m.name )
-
-        # Delete all type = 'EMPTY' objects
+            
+        # Apply modifiers on mesh object
         bpy.ops.object.select_all( action = 'DESELECT' )
-        for e in [ e for e in scn.objects if e.type == 'EMPTY' ]:
-            e.select = True        # Select empty
-        bpy.ops.object.delete()    # Delete selected objects
+        scan.select = True        # Select curve
+        scn.objects.active = scan # Set curve as active object
+        for m in scan.modifiers:
+            bpy.ops.object.modifier_apply( modifier = m.name )
+
+        # Delete all type = 'EMPTY' or 'LATTICE' objects
+        types = [ 'EMPTY', 'LATTICE' ]
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        for e in [ e for e in scn.objects if e.type in types ]:
+            if e.hide: e.hide = False # Unhide hidden objects
+            e.select = True           # Select empty / lattice
+        bpy.ops.object.delete()       # Delete selected objects
 
         # Select curve object and set it as active
         bpy.ops.object.select_all( action = 'DESELECT' )
         c.select = True        # Select curve
         scn.objects.active = c # Set curve as active object
 
-        # Reference scan object
-        scan = [ o for o in scn.objects if o.type == 'MESH' ].pop()
-        
         # Convert curve to mesh
         bpy.ops.object.convert( target = 'MESH' )
 
@@ -1089,6 +1130,8 @@ class create_insole_from_curve( bpy.types.Operator ):
 
         self.clear_bottom_verts( context, c ) # Clear bottom vertices
 
+        bpy.ops.object.perform_cleanup()
+        
         return {'FINISHED'}
 
 class fill_holes( bpy.types.Operator ):
@@ -1117,11 +1160,11 @@ class fill_holes( bpy.types.Operator ):
             ]
 
             if len( shared_edges ) > 0:
-                    # Then the lookup vert and this vert have a common edge.
-                    # And if so, call this function again with this vert
-                    self.find_next_linked_vert( 
-                        context, edges, selected, loop, j 
-                    )
+                # Then the lookup vert and this vert have a common edge.
+                # And if so, call this function again with this vert
+                self.find_next_linked_vert( 
+                    context, edges, selected, loop, j 
+                )
 
         return loop
 
@@ -1143,7 +1186,9 @@ class fill_holes( bpy.types.Operator ):
 
         bm = bmesh.from_edit_mesh( o.data )        
 
-        edges = { e.index : [ v.index for v in e.verts ] for e in bm.edges }
+        edges = { 
+            e.index : [ v.index for v in e.verts ] for e in bm.edges if e.select
+        }
 
         selected_verts = [ v.index for v in bm.verts if v.select ]
 
@@ -1165,27 +1210,17 @@ class fill_holes( bpy.types.Operator ):
             context, edges, selected_set, loop_verts, topy_vert 
         )
 
-        '''
-        # Deselect the outer rim verts
+        # Select the inner holes' verts
         for i in loop:
             bm.verts[ i ].select = False
 
-        bm.select_flush( True )        
-        '''
+        bm.select_flush( False )
 
-        bpy.ops.object.mode_set(mode = 'OBJECT')
-        for i in loop:
-            o.data.vertices[ i ].select = False
-
-        bpy.ops.object.mode_set(mode = 'EDIT'  )
-
-        '''
         # Fill holes and triangulate
         bpy.ops.mesh.fill()
         bpy.ops.mesh.quads_convert_to_tris()
 
         bpy.ops.object.mode_set(mode = 'OBJECT')
-        '''
 
         return {'FINISHED'}
             
@@ -1276,55 +1311,58 @@ class create_front_controls( bpy.types.Operator ):
         bpy.ops.object.select_all( action = 'DESELECT' )
         lattice.select = True
         context.scene.objects.active = lattice        
-        
-    def create_empties( self, context, obj, lattice ):
-        self.select_lattice( context, lattice )
+
+    def select_lattice_points( self, context, lattice, cat ):
+        ''' Select the points of the provided category
+            ( front-center / front-left / front-right )
+        '''
 
         # Go to edit mode
         bpy.ops.object.mode_set( mode = 'EDIT' )
         
         # Deselect all lattice points
         bpy.ops.lattice.select_all( action = 'DESELECT' )
+        
+        if cat == 'center':
+            lattice.data.points[10].select = True
+            lattice.data.points[22].select = True
+        if cat == 'right':
+            lattice.data.points[11].select = True
+            lattice.data.points[23].select = True
+        if cat == 'left':
+            lattice.data.points[9].select  = True
+            lattice.data.points[21].select = True
 
-        max_y = max_x = -10000
-        min_x = 10000
-        
+        '''
         for i,p in enumerate( lattice.data.points ):
-            co = p.co * lattice.matrix_world
-            if co.y > max_y: max_y = round( co.y, 2 )
-            if co.x > max_x: max_x = round( co.x, 2 )
-            if co.x < min_x: min_x = round( co.x, 2 )
-        
-        # Select frontmost two points at center
-        all_points = { 'front' : [], 'left' : [], 'right' : [] }
-        for i,p in enumerate( lattice.data.points ):
-            co = p.co * lattice.matrix_world
-            top_y  = round( co.y ) == max_y
-            left   = round( co.x ) == min_x
-            right  = round( co.x ) == max_x
-            center = round( co.x ) == round( ( max_x - min_x ) / 2, 2 )
-            if top_y and center: 
-                all_points['front'].append( i )
-            elif top_y and right:
-                all_points['right'].append( i )
-            elif max_y and left:
-                all_points['left'].append( i )
+            # See if this point as at the front, left, right or center
+            front  = p.co.y ==  0.5
+            left   = p.co.x == -0.5
+            right  = p.co.x ==  0.5
+            center = p.co.x ==  0.0
+            if front:
+                if cat == 'center' and center or \
+                   cat == 'right'  and right  or \
+                   cat == 'left'   and left:  
+                    p.select = True
+        '''
+                    
+    def create_empties( self, context, obj, lattice ):
+        self.select_lattice( context, lattice )
 
         hooks = {}
-        for pdir in all_points.keys():
-            points = all_points[ pdir ]
-            hook   = self.create_empty( context, lattice, points )
-            hooks[ pdir ] = hook
-
-            self.hook_lattice_to_empty( context, hook, lattice, points )
+        for cat in [ 'center', 'right', 'left' ]:
+            hook         = self.create_empty( context, lattice, cat )
+            hook.name    = cat
+            hooks[ cat ] = hook
+            
+            self.hook_lattice_to_empty( context, hook, lattice, cat )
             
         return hooks
 
-    def create_empty( self, context, lattice, points ):
+    def create_empty( self, context, lattice, cat ):
         # Select points
-        bpy.ops.lattice.select_all( action = 'DESELECT' )
-        for p in points: 
-            lattice.data.points[ p ].select = True
+        self.select_lattice_points( context, lattice, cat )
 
         # Move cursor to selected
         bpy.ops.view3d.snap_cursor_to_selected()
@@ -1344,9 +1382,9 @@ class create_front_controls( bpy.types.Operator ):
 
         return empty
         
-    def hook_lattice_to_empty( self, context, empty, lattice, points ):
+    def hook_lattice_to_empty( self, context, empty, lattice, cat ):
 
-        # Select both empty (first), then curve
+        # Select both empty (first), then lattice
         bpy.ops.object.select_all( action = 'DESELECT' ) # deselect all
         empty.select   = True
         lattice.select = True
@@ -1356,9 +1394,7 @@ class create_front_controls( bpy.types.Operator ):
         bpy.ops.object.mode_set(mode = 'EDIT')
         
         # Create hook modifier for the selected point
-        bpy.ops.lattice.select_all( action = 'DESELECT' )
-        for p in points: 
-            lattice.data.points[ p ].select = True
+        self.select_lattice_points( context, lattice, cat )
         
         bpy.ops.object.hook_add_selob()
             
@@ -1378,8 +1414,10 @@ class create_front_controls( bpy.types.Operator ):
         bpy.ops.object.mode_set( mode = 'OBJECT' )
         bpy.ops.object.select_all( action = 'DESELECT' )
         
-        hooks[ 'front' ].select = True
-        context.scene.objects.active = hooks[ 'front' ]
+        hooks[ 'center' ].select = True
+        context.scene.objects.active = hooks[ 'center' ]
+        
+        lattice.hide = True
         
         return {'FINISHED'}
         
