@@ -142,7 +142,7 @@ class insole_automation_tools( bpy.types.Panel ):
         r.operator( 
             'object.flatten_front',
             text = 'Flatten Front',
-            icon = 'BRUSH_FLATTEN'
+            icon = 'MESH_PLANE'
         )
         
         r.operator( 
@@ -1806,9 +1806,9 @@ class insole_props( bpy.types.PropertyGroup ):
         description = "The height of the cast's lip",
         name        = "Lip Height",
         subtype     = 'FACTOR',
-        default     = 0.2,
+        default     = 2.0,
         min         = 0.0,
-        max         = 10.0
+        max         = 50.0
     )    
     
 class create_insole_cast( bpy.types.Operator ):
@@ -1883,6 +1883,23 @@ class create_insole_cast( bpy.types.Operator ):
         # Apply transformations (scale)
         bpy.ops.object.transform_apply( scale = True )
         
+        # Slice block in middle to create center line
+        bpy.ops.object.mode_set( mode = 'EDIT' )
+        bpy.ops.mesh.loopcut_slide(
+            MESH_OT_loopcut = { 
+                "number_cuts" : 1, "smoothness" : 0, "edge_index" : -1 
+            },
+            TRANSFORM_OT_edge_slide = { 
+                "value"           : 0, 
+                "snap_point"      : (0, 0, 0), 
+                "snap_normal"     : (0, 0, 0), 
+                "release_confirm" : False 
+            }
+        )
+        
+        # Back to object mode
+        bpy.ops.object.mode_set( mode = 'OBJECT' )
+        
     def prepare_insoles( self, context ): 
         """ Pre boolean positioning and preparation """
         props = context.scene.insole_properties
@@ -1954,21 +1971,9 @@ class create_insole_cast( bpy.types.Operator ):
             
             bm = bmesh.from_edit_mesh( cast.data ) # Create bmesh object
             
-            # Find top face
-            max = -10000
-            idx = -1
-            for i,f in enumerate( bm.faces ):
-                center_co = f.calc_center_median()
-                if center_co > max:
-                    max = center_co
-                    idx = i
-            
-            # Select top face
-            bpy.ops.mesh.select_all( action = 'DESELECT' )
-            bm.faces[i].select = True
-            bm.select_flush( True )
-
-            bpy.ops.view3d.snap_cursor_to_selected() # Cursor to selected
+            # Find cast's top
+            cloc = cast.location + Vector( ( 0, 0, cast.dimensions.z / 2 ) )
+            context.scene.cursor_lcation = cloc # Move cursor to cast's top
 
             # Select insole object
             bpy.ops.object.mode_set(   mode   = 'OBJECT'   )
