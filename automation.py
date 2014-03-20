@@ -1883,20 +1883,12 @@ class create_insole_cast( bpy.types.Operator ):
         # Apply transformations (scale)
         bpy.ops.object.transform_apply( scale = True )
         
-        # Slice block in middle to create center line
+        # Subdivide block
         bpy.ops.object.mode_set( mode = 'EDIT' )
-        bpy.ops.mesh.loopcut_slide(
-            MESH_OT_loopcut = { 
-                "number_cuts" : 1, "smoothness" : 0, "edge_index" : -1 
-            },
-            TRANSFORM_OT_edge_slide = { 
-                "value"           : 0, 
-                "snap_point"      : (0, 0, 0), 
-                "snap_normal"     : (0, 0, 0), 
-                "release_confirm" : False 
-            }
-        )
-        
+        bpy.ops.mesh.select_mode( type = 'VERT' )
+        bpy.ops.mesh.select_all( action = 'SELECT' )
+        bpy.ops.mesh.subdivide()
+
         # Back to object mode
         bpy.ops.object.mode_set( mode = 'OBJECT' )
         
@@ -1962,6 +1954,7 @@ class create_insole_cast( bpy.types.Operator ):
             
             # Snap insole to top of cast face            
             # Find cast's top
+            cast = context.scene.objects[ self.cast ]
             cloc = cast.location + Vector( ( 0, 0, cast.dimensions.z / 2 ) )
             context.scene.cursor_location = cloc # Move cursor to cast's top
 
@@ -1972,7 +1965,7 @@ class create_insole_cast( bpy.types.Operator ):
             transform_distance = cast_width / 2 - o.dimensions.x / 2 - gap
             
             # Right insole placed at left edge, so direction needs to be flipped
-            if o.name == self.insole_R: transform_distance *= -1
+            if name == self.insole_R: transform_distance *= -1
             
             bpy.ops.transform.translate( 
                 value = ( 
@@ -1987,6 +1980,10 @@ class create_insole_cast( bpy.types.Operator ):
             bpy.ops.mesh.select_mode( type = 'VERT' )
             
             bpy.ops.mesh.select_non_manifold()
+            
+            # Store inner loop vert coordinates
+            bm = bmesh.from_edit_mesh( o.data ) # Create bmesh object
+            inner_loop = [ v.co * o.matrix_world for v in bm.verts if v.select ]
             
             # Extrude in place
             bpy.ops.mesh.extrude_region()
@@ -2006,13 +2003,70 @@ class create_insole_cast( bpy.types.Operator ):
             bpy.ops.mesh.fill()
             bpy.ops.mesh.quads_convert_to_tris()
             
-    def create_positive_cast( self, context ):
+            bpy.ops.object.mode_set( mode = 'OBJECT' )
+            
+            cast = self.create_positive_cast( context, cast, o, inner_loop )
+            
+    def create_positive_cast( self, context, cast, insole, inner_loop ):
         """ Expand insole to create a positive for cast creation """
-        pass
+        
+        # Select cast
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        cast.select = True
+        context.scene.objects.active = cast
+        
+        # Duplicate cast in place and reference new duplicate
+        bpy.ops.object.duplicate()
+        cast2 = context.scene.objects[ context.object.name ]
 
-    def create_cast( self, context ):
-        """ Crete finished cast """
-        pass
+        for o in [ cast, cast2 ]:
+            bpy.ops.object.select_all( action = 'DESELECT' )
+            cast.select = True
+            context.scene.objects.active = cast
+
+            # Add boolean modifier - union to one duplicate
+            bpy.ops.object.modifier_add( type = 'BOOLEAN' )
+            m = o.modifiers[-1]
+            if o == cast:
+                m.operation = 'UNION'
+            else:
+                m.operation = 'DIFFERENCE'
+                
+            # Set insole as boolean object
+            m.object = insole
+        
+            # Apply modifier
+            bpy.ops.object.modifier_apply( modifier = m.name )
+        
+        # Join the two copies
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        for o in [ cast, cast2 ]: o.select = True
+        context.scene.objects.active = cast
+
+        bpy.ops.object.join()
+        
+        joined_cast = context.scene.objects[ context.object.name ]
+        
+        # Remove doubles
+        bpy.ops.object.mode_set(  mode   = 'EDIT'   )
+        bpy.ops.mesh.select_mode( type   = 'VERT'   )
+        bpy.ops.mesh.select_all(  action = 'SELECT' )
+        
+        bpy.ops.mesh.remove_doubles()
+        
+        # Select the vertices position on the inner loop
+        bpy.ops.mesh.select_all( action = 'DESELECT' )
+        
+        bm = bmesh.from_edit_mesh( joined_cast.data )
+        
+        for v in bm.verts:
+            co = v.co * joined_cast.matrix_world
+            if co in inner_loop: v.select = True
+        
+        # Delete all faces
+        bpy.ops.mesh.delete( type = 'FACE' )
+        
+        return cast
 
     def execute( self, context ):
         self.create_cast_block( context )
