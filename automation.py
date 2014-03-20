@@ -245,9 +245,10 @@ class insole_automation_tools( bpy.types.Panel ):
 
         bc.label( "Create CNC cast from two Insoles" )
 
-        # Cast block dimensions
+        # Cast block dimensions and lip height
         bc.prop( context.scene.insole_properties, 'cast_dimensions' )
-        
+        bc.prop( context.scene.insole_properties, 'cast_lip_height' )
+ 
         # Create cast operator
         bc.operator(
             'object.create_insole_cast',
@@ -1800,6 +1801,16 @@ class insole_props( bpy.types.PropertyGroup ):
         size        = 3
     )
     
+    # Lip height
+    cast_lip_height = bpy.props.FloatProperty(
+        description = "The height of the cast's lip",
+        name        = "Lip Height",
+        subtype     = 'FACTOR',
+        default     = 0.2,
+        min         = 0.0,
+        max         = 10.0
+    )    
+    
 class create_insole_cast( bpy.types.Operator ):
     """ Create CNC cast out of two selected insole objects """
     bl_idname      = "object.create_insole_cast"
@@ -1969,7 +1980,17 @@ class create_insole_cast( bpy.types.Operator ):
             
             # Place at insole at correct side and distance from edge
             transform_distance = cast_width / 2 - o.dimensions.x / 2 - gap
-            bpy.ops.transform.translate( value = ( transform_distance, 0, 0 ) )
+            
+            # Right insole placed at left edge, so direction needs to be flipped
+            if o.name == self.insole_R: transform_distance *= -1
+            
+            bpy.ops.transform.translate( 
+                value = ( 
+                    transform_distance,   # Move to cast's right / left edge 
+                    0,
+                    props.cast_lip_height # Elevate to create lip
+                ) 
+            )
             
             # Select non manifold
             bpy.ops.object.mode_set(  mode = 'EDIT' )
@@ -2010,192 +2031,9 @@ class create_insole_cast( bpy.types.Operator ):
         return {'FINISHED'}
     
 right_foot_insole_curve_coordinates = [
-  {
-    "rh": {
-      "type": "ALIGNED", 
-      "co": [
-        -52.266014099121094, 
-        27.295093536376953, 
-        0.0
-      ]
-    }, 
-    "lh": {
-      "type": "ALIGNED", 
-      "co": [
-        -30.258426666259766, 
-        -40.74249267578125, 
-        0.0
-      ]
-    }, 
-    "point": [
-      -37.095340728759766, 
-      -19.605823516845703, 
-      0.0
-    ]
-  }, 
-  {
-    "rh": {
-      "type": "ALIGNED", 
-      "co": [
-        -57.40950012207031, 
-        115.08479309082031, 
-        0.0
-      ]
-    }, 
-    "lh": {
-      "type": "ALIGNED", 
-      "co": [
-        -60.92235565185547, 
-        64.29387664794922, 
-        0.0
-      ]
-    }, 
-    "point": [
-      -59.16592788696289, 
-      89.6893310546875, 
-      0.0
-    ]
-  }, 
-  {
-    "rh": {
-      "type": "ALIGNED", 
-      "co": [
-        9.416471481323242, 
-        129.8833770751953, 
-        0.0
-      ]
-    }, 
-    "lh": {
-      "type": "ALIGNED", 
-      "co": [
-        -45.24030303955078, 
-        128.87692260742188, 
-        0.0
-      ]
-    }, 
-    "point": [
-      -18.759876251220703, 
-      129.36453247070312, 
-      0.0
-    ]
-  }, 
-  {
-    "rh": {
-      "type": "FREE", 
-      "co": [
-        51.541465759277344, 
-        49.96627426147461, 
-        0.0
-      ]
-    }, 
-    "lh": {
-      "type": "FREE", 
-      "co": [
-        29.194015502929688, 
-        109.89535522460938, 
-        0.0
-      ]
-    }, 
-    "point": [
-      40.367740631103516, 
-      79.93081665039062, 
-      0.0
-    ]
-  }, 
-  {
-    "rh": {
-      "type": "FREE", 
-      "co": [
-        44.40078353881836, 
-        -62.87953567504883, 
-        0.0
-      ]
-    }, 
-    "lh": {
-      "type": "FREE", 
-      "co": [
-        54.11138153076172, 
-        10.025206565856934, 
-        0.0
-      ]
-    }, 
-    "point": [
-      47.87248611450195, 
-      -29.36204719543457, 
-      0.0
-    ]
-  }, 
-  {
-    "rh": {
-      "type": "ALIGNED", 
-      "co": [
-        32.898555755615234, 
-        -141.05630493164062, 
-        0.0
-      ]
-    }, 
-    "lh": {
-      "type": "ALIGNED", 
-      "co": [
-        44.93161392211914, 
-        -95.7703857421875, 
-        0.0
-      ]
-    }, 
-    "point": [
-      38.91508483886719, 
-      -118.41334533691406, 
-      0.0
-    ]
-  }, 
-  {
-    "rh": {
-      "type": "ALIGNED", 
-      "co": [
-        -25.744993209838867, 
-        -141.8401641845703, 
-        0.0
-      ]
-    }, 
-    "lh": {
-      "type": "ALIGNED", 
-      "co": [
-        20.334665298461914, 
-        -153.45138549804688, 
-        0.0
-      ]
-    }, 
-    "point": [
-      -9.32647705078125, 
-      -145.97732543945312, 
-      0.0
-    ]
-  }, 
-  {
-    "rh": {
-      "type": "ALIGNED", 
-      "co": [
-        -31.525466918945312, 
-        -70.26678466796875, 
-        0.0
-      ]
-    }, 
-    "lh": {
-      "type": "ALIGNED", 
-      "co": [
-        -29.268753051757812, 
-        -120.81562805175781, 
-        0.0
-      ]
-    }, 
-    "point": [
-      -30.397109985351562, 
-      -95.54120635986328, 
-      0.0
-    ]
-  }
+    {'rh': {'co': [-52.266014099121094, 27.295093536376953, 0.0], 'type': 'ALIGNED'}, 'lh': {'co': [-30.258426666259766, -40.74249267578125, 0.0], 'type': 'ALIGNED'}, 'point': [-37.095340728759766, -19.605823516845703, 0.0]}, {'rh': {'co': [-57.40950012207031, 115.08479309082031, 0.0], 'type': 'ALIGNED'}, 'lh': {'co': [-60.92235565185547, 64.29387664794922, 0.0], 'type': 'ALIGNED'}, 'point': [-59.16592788696289, 89.6893310546875, 0.0]}, {'rh': {'co': [9.416471481323242, 129.8833770751953, 0.0], 'type': 'ALIGNED'}, 'lh': {'co': [-45.24030303955078, 128.87692260742188, 0.0], 'type': 'ALIGNED'}, 'point': [-18.759876251220703, 129.36453247070312, 0.0]}, {'rh': {'co': [51.541465759277344, 49.96627426147461, 0.0], 'type': 'FREE'}, 'lh': {'co': [29.194015502929688, 109.89535522460938, 0.0], 'type': 'FREE'}, 'point': [40.367740631103516, 79.93081665039062, 0.0]}, {'rh': {'co': [44.40078353881836, -62.87953567504883, 0.0], 'type': 'FREE'}, 'lh': {'co': [54.11138153076172, 10.025206565856934, 0.0], 'type': 'FREE'}, 'point': [47.87248611450195, -29.36204719543457, 0.0]}, {'rh': {'co': [32.898555755615234, -141.05630493164062, 0.0], 'type': 'ALIGNED'}, 'lh': {'co': [44.93161392211914, -95.7703857421875, 0.0], 'type': 'ALIGNED'}, 'point': [38.91508483886719, -118.41334533691406, 0.0]}, {'rh': {'co': [-25.744993209838867, -141.8401641845703, 0.0], 'type': 'ALIGNED'}, 'lh': {'co': [20.334665298461914, -153.45138549804688, 0.0], 'type': 'ALIGNED'}, 'point': [-9.32647705078125, -145.97732543945312, 0.0]}, {'rh': {'co': [-31.525466918945312, -70.26678466796875, 0.0], 'type': 'ALIGNED'}, 'lh': {'co': [-29.268753051757812, -120.81562805175781, 0.0], 'type': 'ALIGNED'}, 'point': [-30.397109985351562, -95.54120635986328, 0.0]}
 ]
-    
+
 def register():
     bpy.utils.register_module(__name__)
     bpy.types.Scene.insole_properties = bpy.props.PointerProperty( 
