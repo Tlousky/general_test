@@ -245,6 +245,10 @@ class insole_automation_tools( bpy.types.Panel ):
 
         bc.label( "Create CNC cast from two Insoles" )
 
+        # Cast block dimensions
+        bc.prop( context.scene.insole_properties, 'cast_dimensions' )
+        
+        # Create cast operator
         bc.operator(
             'object.create_insole_cast',
             text = 'Create CNC Cast',
@@ -574,7 +578,10 @@ class flatten_front( bpy.types.Operator ):
 
         # 10. Go back to object mode.
         bpy.ops.object.mode_set(mode = 'OBJECT')
-        
+ 
+        # 11. Perform cleanup post flattenning
+        bpy.ops.object.perform_cleanup()
+ 
         return {'FINISHED'}
 
 class preview_flatten( bpy.types.Operator ):
@@ -1091,7 +1098,7 @@ class create_insole_from_curve( bpy.types.Operator ):
 
         # Go to object mode
         bpy.ops.object.mode_set( mode = 'OBJECT' )
-
+        
     def execute( self, context ):
         props = context.scene.insole_properties
         scn   = context.scene
@@ -1190,6 +1197,7 @@ class create_insole_from_curve( bpy.types.Operator ):
 
         self.clear_bottom_verts( context, c ) # Clear bottom vertices
 
+        # Perform cleanup post trimming
         bpy.ops.object.perform_cleanup()
         
         return {'FINISHED'}
@@ -1382,6 +1390,8 @@ class create_insole( bpy.types.Operator ):
         context.scene.objects.active = o
         for i in range( len( o.material_slots ) ):
             bpy.ops.object.material_slot_remove()
+        
+        bpy.ops.object.perform_cleanup()
         
         return {'FINISHED'}
         
@@ -1778,8 +1788,20 @@ class insole_props( bpy.types.PropertyGroup ):
         max         = 1.0
     )
 
+    # Cast dimensions
+    cast_dimensions = bpy.props.FloatVectorProperty(
+        name        = "Cast Dimensions", 
+        description = "XYZ Dimensions of the cast block", 
+        default     = ( 240.0, 330.0, 40.0 ),
+        min         = 0.0,
+        precision   = 2,
+        subtype     = 'XYZ',
+        unit        = 'LENGTH', 
+        size        = 3
+    )
+    
 class create_insole_cast( bpy.types.Operator ):
-    """ Clear all materials assigned to active object """
+    """ Create CNC cast out of two selected insole objects """
     bl_idname      = "object.create_insole_cast"
     bl_label       = "Create Cast"
     bl_description = "Clear CNC cast from imported Insoles"
@@ -1799,6 +1821,8 @@ class create_insole_cast( bpy.types.Operator ):
     
     def create_cast_block( self, context ):
         """ Create box cast block """
+        
+        props = context.scene.insole_properties
         
         # Find and assign left and right insole properties
            
@@ -1842,8 +1866,8 @@ class create_insole_cast( bpy.types.Operator ):
         self.cast = context.object.name
         cast      = context.scene.objects[ self.cast ]
         
-        # Set dimensions    x    y    z 
-        cast.dimensions = ( 240, 330, 40 )        
+        # Set dimensions
+        cast.dimensions = props.cast_dimensions        
         
         # Apply transformations (scale)
         bpy.ops.object.transform_apply( scale = True )
@@ -1936,21 +1960,17 @@ class create_insole_cast( bpy.types.Operator ):
             # Scale extruded geometry           x    y    z
             bpy.ops.transform.resize( value = ( 1.3, 1.1, 1 ) )
             
-            # Expand selection to select ring faces
-            bpy.ops.mesh.select_more()
-            
-            # Extrude up 5mm
-            bpy.ops.mesh.extrude_region_move( 
-                TRANSFORM_OT_translate = { "value" :(0, 0, 5) }
-            )
-            
-            # Select non manifold
-            bpy.ops.mesh.select_non_manifold()
+            # Calculate Z height = current Z dimension + 1
+            extrude_length = -1 * ( o.dimensions.z + 1 )
             
             # Extrude down by 6 mm
             bpy.ops.mesh.extrude_region_move( 
-                TRANSFORM_OT_translate = { "value" :(0, 0, -6) }
+                TRANSFORM_OT_translate = { "value" :(0, 0, extrude_length) }
             )
+            
+            # Close face and triangulate
+            bpy.ops.mesh.fill()
+            bpy.ops.mesh.quad_convert_to_tris()
             
     def create_positive_cast( self, context ):
         """ Expand insole to create a positive for cast creation """
