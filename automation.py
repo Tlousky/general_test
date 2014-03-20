@@ -1874,7 +1874,20 @@ class create_insole_cast( bpy.types.Operator ):
         
     def prepare_insoles( self, context ): 
         """ Pre boolean positioning and preparation """
+        props = context.scene.insole_properties
 
+        # Find the width of both insoles, and compare it with cast width
+        total_insole_width = sum( 
+            [ context.scene.objects[ ins ].dimensions.x \
+            for ins in [ self.insole_R, self.insole_L ] ]
+        )
+        
+        cast_width = props.cast_dimensions.x 
+        total_gap  = cast_width - total_insole_width
+
+        # Divide gap by 3 - will be used to space insoles and spread on cast
+        gap = math.trunc( total_gap / 3 )
+        
         for name in [ self.insole_R, self.insole_L ]:
             bpy.ops.object.mode_set( mode = 'OBJECT' )
 
@@ -1930,23 +1943,33 @@ class create_insole_cast( bpy.types.Operator ):
             
             bm = bmesh.from_edit_mesh( cast.data ) # Create bmesh object
             
-            # Select top face (all verts located at object's top Z value)
-            for v in bm.verts:
-                co = v.co * cast.matrix_world
-                if round( co.z, 2 ) == \
-                   round( cast.location.z + cast.dimensions.z / 2, 2):
-                    v.select = True
+            # Find top face
+            max = -10000
+            idx = -1
+            for i,f in enumerate( bm.faces ):
+                center_co = f.calc_center_median()
+                if center_co > max:
+                    max = center_co
+                    idx = i
             
+            # Select top face
+            bpy.ops.mesh.select_all( action = 'DESELECT' )
+            bm.faces[i].select = True
             bm.select_flush( True )
-            
+
             bpy.ops.view3d.snap_cursor_to_selected() # Cursor to selected
 
+            # Select insole object
             bpy.ops.object.mode_set(   mode   = 'OBJECT'   )
             bpy.ops.object.select_all( action = 'DESELECT' )
             o.select = True
             context.scene.objects.active = o
             
             bpy.ops.view3d.snap_selected_to_cursor() # Selected to cursor
+            
+            # Place at insole at correct side and distance from edge
+            transform_distance = cast_width / 2 - o.dimensions.x / 2 - gap
+            bpy.ops.transform.translate( value = ( transform_distance, 0, 0 ) )
             
             # Select non manifold
             bpy.ops.object.mode_set(  mode = 'EDIT' )
@@ -1970,7 +1993,7 @@ class create_insole_cast( bpy.types.Operator ):
             
             # Close face and triangulate
             bpy.ops.mesh.fill()
-            bpy.ops.mesh.quad_convert_to_tris()
+            bpy.ops.mesh.quads_convert_to_tris()
             
     def create_positive_cast( self, context ):
         """ Expand insole to create a positive for cast creation """
