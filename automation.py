@@ -1853,22 +1853,19 @@ class create_insole_cast( bpy.types.Operator ):
 
             bm = bmesh.from_edit_mesh( o.data )
 
-            # Find min and max X values
-            minX =  10000
-            maxX = -10000
+            maxZ =  -10000
+            topZco   = Vector()
             for v in bm.verts:
                 co = v.co * o.matrix_world
-                if co.x < minX: minX = co.x
-                if co.x > maxX: maxX = co.x
+                if co.z > maxZ: 
+                    maxZ   = co.z
+                    topZco = v.co
 
-            # A right insole is one where the distance between the origin and 
-            # the leftmost (minX) vertex is larger than the distance to the 
-            # rightmost (maxX) vert. The left insole is opposite.
-            if abs( o.location.x - minX ) > abs( o.location.x - maxX ):
+            if topZco.x < 0:
                 self.insole_R = o.name
             else:
                 self.insole_L = o.name
-
+                
         # Create cast block
         bpy.ops.object.mode_set( mode = 'OBJECT' )
         bpy.ops.mesh.primitive_cube_add()
@@ -1967,13 +1964,8 @@ class create_insole_cast( bpy.types.Operator ):
             # Right insole placed at left edge, so direction needs to be flipped
             if name == self.insole_R: transform_distance *= -1
             
-            bpy.ops.transform.translate( 
-                value = ( 
-                    transform_distance,   # Move to cast's right / left edge 
-                    0,
-                    props.cast_lip_height # Elevate to create lip
-                ) 
-            )
+            # Move to cast's right / left edge 
+            bpy.ops.transform.translate( value = ( transform_distance, 0, 0 ) )
             
             # Select non manifold
             bpy.ops.object.mode_set(  mode = 'EDIT' )
@@ -1983,7 +1975,23 @@ class create_insole_cast( bpy.types.Operator ):
             
             # Store inner loop vert coordinates
             bm = bmesh.from_edit_mesh( o.data ) # Create bmesh object
-            inner_loop = [ v.co * o.matrix_world for v in bm.verts if v.select ]
+
+            inner_loop = []
+            for v in [ v for v in bm.verts if v.select]:
+                co = v.co * o.matrix_world
+                adjusted_co = [ round( p, 2 ) for p in co ]
+                
+                inner_loop.append( adjusted_co )
+
+            bpy.ops.object.mode_set( mode = 'OBJECT' )
+
+            # Elevate to create lip
+            bpy.ops.transform.translate( 
+                value = ( 0, 0, props.cast_lip_height ) 
+            )
+                
+            bpy.ops.object.mode_set( mode = 'EDIT' )
+            bpy.ops.mesh.select_non_manifold()
             
             # Extrude in place
             bpy.ops.mesh.extrude_region()
@@ -2004,6 +2012,14 @@ class create_insole_cast( bpy.types.Operator ):
             bpy.ops.mesh.quads_convert_to_tris()
             
             bpy.ops.object.mode_set( mode = 'OBJECT' )
+
+            # Rotate left insole by 180 degrees
+            if name == self.insole_L: 
+                bpy.ops.transform.rotate( 
+                    value = math.radians(180), axis = (0,0,1)
+                )
+            
+            bpy.ops.object.transform_apply( rotation = True )
             
             cast = self.create_positive_cast( context, cast, o, inner_loop )
             
@@ -2022,7 +2038,7 @@ class create_insole_cast( bpy.types.Operator ):
         for o in [ cast, cast2 ]:
             bpy.ops.object.select_all( action = 'DESELECT' )
             cast.select = True
-            context.scene.objects.active = cast
+            context.scene.objects.active = o
 
             # Add boolean modifier - union to one duplicate
             bpy.ops.object.modifier_add( type = 'BOOLEAN' )
@@ -2054,6 +2070,7 @@ class create_insole_cast( bpy.types.Operator ):
         
         bpy.ops.mesh.remove_doubles()
         
+        '''
         # Select the vertices position on the inner loop
         bpy.ops.mesh.select_all( action = 'DESELECT' )
         
@@ -2061,10 +2078,14 @@ class create_insole_cast( bpy.types.Operator ):
         
         for v in bm.verts:
             co = v.co * joined_cast.matrix_world
-            if co in inner_loop: v.select = True
+            adjusted_co = [ round( p, 2 ) for p in co ]
+            if adjusted_co in inner_loop: v.select = True
+            
+        bm.select_flush( True )
         
         # Delete all faces
         bpy.ops.mesh.delete( type = 'FACE' )
+        '''
         
         return cast
 
