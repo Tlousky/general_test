@@ -13,7 +13,7 @@ bl_info = {
 }
 
 import bpy, bmesh, json, math
-from mathutils    import Color
+from mathutils    import Color, Vector
 
 # Constants
 MAX_FACES         = 10000
@@ -1960,30 +1960,15 @@ class create_insole_cast( bpy.types.Operator ):
             bpy.ops.object.mode_set(   mode = 'OBJECT'        )
             bpy.ops.object.origin_set( type = 'ORIGIN_CURSOR' )
             
-            # Snap insole to top of cast face
-            cast = context.scene.objects[ self.cast ]
-            bpy.ops.object.select_all( action = 'DESELECT' )
-            cast.select = True
-            context.scene.objects.active = cast
-            
-            bpy.ops.object.mode_set(  mode = 'EDIT' )
-            bpy.ops.mesh.select_mode( type = 'FACE' )
-            
-            bm = bmesh.from_edit_mesh( cast.data ) # Create bmesh object
-            
+            # Snap insole to top of cast face            
             # Find cast's top
             cloc = cast.location + Vector( ( 0, 0, cast.dimensions.z / 2 ) )
-            context.scene.cursor_lcation = cloc # Move cursor to cast's top
+            context.scene.cursor_location = cloc # Move cursor to cast's top
 
-            # Select insole object
-            bpy.ops.object.mode_set(   mode   = 'OBJECT'   )
-            bpy.ops.object.select_all( action = 'DESELECT' )
-            o.select = True
-            context.scene.objects.active = o
+            bpy.ops.object.mode_set( mode = 'OBJECT' )
+            bpy.ops.view3d.snap_selected_to_cursor() # Move insole to cursor
             
-            bpy.ops.view3d.snap_selected_to_cursor() # Selected to cursor
-            
-            # Place at insole at correct side and distance from edge
+            # Find x location by calculating distance from cast edge
             transform_distance = cast_width / 2 - o.dimensions.x / 2 - gap
             
             # Right insole placed at left edge, so direction needs to be flipped
