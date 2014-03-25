@@ -183,8 +183,10 @@ class insole_automation_tools( bpy.types.Panel ):
         b  = col.box()
         bc = b.column()
         l  = bc.label( "Add outline curve" )
-        r  = bc.row()
 
+        bc.prop( context.scene.insole_properties, 'insole_size' )
+
+        r  = bc.row()
         r.operator( 
             'object.create_and_fit_curve',
             text = 'Left foot',
@@ -805,8 +807,12 @@ class create_and_fit_curve( bpy.types.Operator ):
         curve.select = True                   # Select curve
         context.scene.objects.active = curve  # Make it the active object
    
-        # Equate the dimensions of the curve to the scanned insole object
-        curve.dimensions = ( o.dimensions.x, o.dimensions.y, 0 )
+        # Resize curve to fit standard sizes
+        y = float( props.insole_size ) * 10
+        multiplier = y / curve.dimensions.y
+        
+        x = curve.dimensions.x * multiplier
+        curve.dimensions = ( x, y, 0 )
 
         # Curve is right foot by default. To get left foot, we must flip it.
         if self.direction == 'L':
@@ -1787,6 +1793,36 @@ class insole_props( bpy.types.PropertyGroup ):
         default     = 0.25,
         min         = 0.0,
         max         = 1.0
+    )
+
+    standard_sizes = [
+        ('21.8', '35.5', ''),
+        ('22.2', '36',   ''),
+        ('22.6', '37',   ''),
+        ('23',   '37.5', ''),
+        ('23.5', '38',   ''),
+        ('23.9', '39',   ''),
+        ('24.3', '39.5', ''),
+        ('24.7', '40',   ''),
+        ('25.2', '40.5', ''),
+        ('25.6', '41.5', ''),
+        ('26',   '42',   ''),
+        ('26.4', '42.5', ''),
+        ('26.9', '43',   ''),
+        ('27.3', '44',   ''),
+        ('27.7', '44.5', ''),
+        ('28.1', '45',   ''),
+        ('28.6', '46',   ''),
+        ('29',   '46.5', ''),
+        ('29.4', '47',   ''),
+        ('29.8', '48',   ''),
+        ('30.3', '49',   '')
+    ]
+    
+    insole_size = bpy.props.EnumProperty(
+        name    = "Insole Size",
+        items   = standard_sizes, 
+        default = '24.7'
     )
 
     # Cast dimensions
