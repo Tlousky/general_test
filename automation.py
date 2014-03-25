@@ -2023,6 +2023,21 @@ class create_insole_cast( bpy.types.Operator ):
             
             cast = self.create_positive_cast( context, cast, o, inner_loop )
             
+        # Call method to delete inner faces
+        self.delete_inner_faces( context )
+        
+        # Call method to delete inner bottom verts
+        self.clean_inner_bottom_verts( context )
+        
+        # Delete the original insole objects
+        bpy.ops.object.mode_set(   mode   = 'OBJECT'   )
+        bpy.ops.object.select_all( action = 'DESELECT' )
+        
+        for name in [ self.insole_R, self.insole_L ]:
+            context.scene.objects[ name ].select = True
+
+        bpy.ops.object.delete() # Delete selected objects
+            
     def create_positive_cast( self, context, cast, insole, inner_loop ):
         """ Expand insole to create a positive for cast creation """
         
@@ -2070,25 +2085,91 @@ class create_insole_cast( bpy.types.Operator ):
         
         bpy.ops.mesh.remove_doubles()
         
-        '''
-        # Select the vertices position on the inner loop
-        bpy.ops.mesh.select_all( action = 'DESELECT' )
-        
-        bm = bmesh.from_edit_mesh( joined_cast.data )
-        
-        for v in bm.verts:
-            co = v.co * joined_cast.matrix_world
-            adjusted_co = [ round( p, 2 ) for p in co ]
-            if adjusted_co in inner_loop: v.select = True
-            
-        bm.select_flush( True )
-        
-        # Delete all faces
-        bpy.ops.mesh.delete( type = 'FACE' )
-        '''
-        
         return cast
 
+    def clean_inner_bottom_verts( self, context ):
+        ''' Clear now useless remains inside the cast '''
+
+        o     = context.object
+        bm    = bmesh.from_edit_mesh( o.data )
+        props = context.scene.insole_properties
+
+        # Select non-manifold
+        bpy.ops.object.mode_set(  mode   = 'EDIT'     )
+        bpy.ops.mesh.select_mode( type   = 'VERT'     )
+        bpy.ops.mesh.select_all(  action = 'DESELECT' )
+        
+        bpy.ops.mesh.select_non_manifold()
+        
+        selected_verts = [ v.index for v in bm.verts if v.select ]
+        
+        avg_z = sum( 
+            [ bm.verts[i].co.z for i in selected_verts ]
+        ) / len( selected_verts )
+        
+        bpy.ops.mesh.select_more()
+
+        # Store all indices of connected verts to non-manifolds
+        selected_verts = [ v.index for v in bm.verts if v.select ]
+        
+        # Select all the verts below the non-manifolds
+        bpy.ops.mesh.select_all( action = 'DESELECT' )
+        
+        for v in [ bm.verts[i] for i in selected_verts ]:
+            # Find lower verts (make sure by adding a safety gap)
+            if v.co.z < ( avg_z * 0.95 ): v.select = True
+        
+        bm.select_flush( True )
+        
+        bpy.ops.mesh.delete() # Delete selected verts
+        
+    def delete_inner_faces( self, context ):
+        ''' Finds and deletes all inner faces (those that do not include
+            extreme vertices from the outermost edges of the mesh)
+        '''
+        o     = context.object
+        bm    = bmesh.from_edit_mesh( o.data )
+        props = context.scene.insole_properties
+
+        extreme_verts = []
+
+        halfX = o.dimensions.x / 2
+        halfY = o.dimensions.y / 2
+
+        x = [ halfX, halfX * -1 ]
+        x = [ round( p, 2 ) for p in x ]
+
+        y = [ halfY, halfY * -1 ]
+        y = [ round( p, 2 ) for p in y ]
+
+        cast_dims = props.cast_dimensions
+
+        for i,v in enumerate(bm.verts):
+            if (round( v.co.x, 2) in x or round( v.co.y ) in y or \
+            v.co.x == 0.0 and round( v.co.y ) in y or \
+            v.co.y == 0.0 and round( v.co.x ) in x or \
+            (v.co.y == 0.0 and v.co.x == 0.0) ) and \
+            round( v.co.z, 2 ) == round( cast_dims.z / 2, 2 ):
+                extreme_verts.append( i )
+                #v.select = True
+
+        extremes_set = set( extreme_verts )
+
+        bpy.ops.mesh.select_all( action = 'DESELECT' )
+        
+        for f in bm.faces:
+            co = f.calc_center_median()
+            fverts = set( [ v.index for v in f.verts ] )
+            
+            if round( co.z, 2 ) == round( cast_dims.z / 2, 2 ):
+                common = fverts & extremes_set
+                if len( common ) == 0: f.select = True
+
+        bm.select_flush( True )
+        
+        # Delete all inner faces
+        bpy.ops.mesh.delete( type = 'FACE' )
+        
     def execute( self, context ):
         self.create_cast_block( context )
         self.prepare_insoles( context )
