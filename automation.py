@@ -145,6 +145,9 @@ class insole_automation_tools( bpy.types.Panel ):
         
         bc.prop( context.scene.insole_properties, 'twist_angle' )
         
+        if ta == 'Heel':
+            bc.prop( context.scene.insole_properties, 'heel_width' )
+        
         # Flatten Front props and operators
         b = col.box()
         bc = b.column()
@@ -377,6 +380,9 @@ class perform_cleanup( bpy.types.Operator ):
         
         # Clear Location (place object on axis origin)
         bpy.ops.object.location_clear()
+        
+        # Apply transformations
+        bpy.ops.object.transform_apply( rotation = True, scale = True )
         
         return {'FINISHED'}
         
@@ -1584,7 +1590,7 @@ class insole_props( bpy.types.PropertyGroup ):
         ''' Update visual preview of flattenning effect '''
 
         o = context.object
-
+        
         materials = {
             'flat' : 'flat_front_insole.mat',
             'mid'  : 'transition_insole.mat',
@@ -1664,6 +1670,22 @@ class insole_props( bpy.types.PropertyGroup ):
             )
             
             self.cumulative_twist += twist_amount
+        
+        elif action == 'scale':
+            desired_width = vector[0]
+            scale_amount  = desired_width / self.cumulative_scale
+            
+            print( "Desired: %s" % desired_width )
+            print( "Samt: %s" % scale_amount )
+            
+            bpy.ops.transform.resize(
+                value                     = ( scale_amount, 1.0, 1.0 ),
+                proportional              = 'ENABLED',
+                proportional_edit_falloff = 'SMOOTH',
+                proportional_size         = o.dimensions.y * self.prop_falloff
+            )
+            
+            self.cumulative_scale = desired_width
             
         bpy.ops.object.mode_set(mode ='OBJECT') # Return to object mode
 
@@ -1674,9 +1696,14 @@ class insole_props( bpy.types.PropertyGroup ):
         o       = context.object
         falloff = self.prop_falloff
 
+        # Apply rotation to avoid weird coloring artefacts
+        bpy.ops.object.transform_apply( rotation = True )
+        
         # Reset twist property values
         self.cumulative_twist = 0.0
+        self.cumulative_scale = 1.0
         self.twist_angle      = 0.0
+        self.heel_width       = 100.0
         
         if self.twist_area == 'Heel':
             self.update_heel_materials( context )
@@ -1702,7 +1729,16 @@ class insole_props( bpy.types.PropertyGroup ):
         self.proportional_transform( 
             context, area_dict[ self.twist_area ], vector, 'rotate'
         )
-        
+
+    def update_heel_width( self, context ):
+        ''' Change the width of the heel area proportionally.
+            uses heel_width as proportional size.
+        '''
+        o       = context.object
+        vector  = ( self.heel_width / 100, 0, 0 )
+
+        self.proportional_transform( context, 'heel', vector, 'scale' )
+
     def update_empty( self, context ):
         ''' updates when the empty is moved and with it, the area '''
         pass
@@ -1780,6 +1816,16 @@ class insole_props( bpy.types.PropertyGroup ):
         update      = update_twist
     )
 
+    heel_width = bpy.props.FloatProperty(
+        description = "Heel width",
+        name        = "Heel Width",
+        subtype     = 'PERCENTAGE',
+        default     = 100.0,
+        min         = 0.0,
+        max         = 1000.0,
+        update      = update_heel_width
+    )
+    
     heel_twist_falloff = bpy.props.FloatProperty(
         description = "Falloff area for heel twist amendments",
         name        = "Falloff",
@@ -1797,6 +1843,13 @@ class insole_props( bpy.types.PropertyGroup ):
         default     = 0.0
     )
 
+    cumulative_scale = bpy.props.FloatProperty(
+        description = "Total scale",
+        name        = "Cumulative Heel Scale",
+        subtype     = 'PERCENTAGE',
+        default     = 1.0
+    )
+    
     prop_falloff = bpy.props.FloatProperty(
         description = "Falloff area for proportional transformations",
         name        = "Falloff",
