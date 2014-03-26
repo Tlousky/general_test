@@ -54,6 +54,17 @@ class insole_automation_tools( bpy.types.Panel ):
             icon = 'IMPORT'
         )
 
+        # Object dimensions
+        if context.object:
+            b = col.box()
+            bc = b.column()
+            bc.label( "%s | Dimensions: " % context.object.name )
+            
+            r  = bc.row()
+            r.label( "X: %s" % round( context.object.dimensions.x, 2 ) )
+            r.label( "Y: %s" % round( context.object.dimensions.y, 2 ) )
+            r.label( "Z: %s" % round( context.object.dimensions.z, 2 ) )
+        
         # Cleanups
         b = col.box()
         bc = b.column()
