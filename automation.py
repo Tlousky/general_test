@@ -2004,7 +2004,8 @@ class create_insole_cast( bpy.types.Operator ):
 
         # Divide gap by 3 - will be used to space insoles and spread on cast
         gap = math.trunc( total_gap / 3 )
-        
+
+        # Rotate and position both insoles on top face of cast, and remove cap
         for name in [ self.insole_R, self.insole_L ]:
             bpy.ops.object.mode_set( mode = 'OBJECT' )
 
@@ -2052,7 +2053,7 @@ class create_insole_cast( bpy.types.Operator ):
             # Snap insole to top of cast face            
             # Find cast's top
             cast = context.scene.objects[ self.cast ]
-            cloc = cast.location + Vector( ( 0, 0, cast.dimensions.z / 2 ) )
+            cloc = cast.location + Vector(( 0, 0, props.cast_dimensions.z / 2 ))
             context.scene.cursor_location = cloc # Move cursor to cast's top
 
             bpy.ops.object.mode_set( mode = 'OBJECT' )
@@ -2067,29 +2068,23 @@ class create_insole_cast( bpy.types.Operator ):
             # Move to cast's right / left edge 
             bpy.ops.transform.translate( value = ( transform_distance, 0, 0 ) )
             
-            # Select non manifold
-            bpy.ops.object.mode_set(  mode = 'EDIT' )
-            bpy.ops.mesh.select_mode( type = 'VERT' )
-            
-            bpy.ops.mesh.select_non_manifold()
-            
-            # Store inner loop vert coordinates
-            bm = bmesh.from_edit_mesh( o.data ) # Create bmesh object
-
-            inner_loop = []
-            for v in [ v for v in bm.verts if v.select]:
-                co = v.co * o.matrix_world
-                adjusted_co = [ round( p, 2 ) for p in co ]
-                
-                inner_loop.append( adjusted_co )
-
             bpy.ops.object.mode_set( mode = 'OBJECT' )
 
             # Elevate to create lip
             bpy.ops.transform.translate( 
                 value = ( 0, 0, props.cast_lip_height ) 
             )
-                
+
+        for name in [ self.insole_R, self.insole_L ]:
+            bpy.ops.object.mode_set( mode = 'OBJECT' )
+
+            o = context.scene.objects[ name ]
+
+            # Select and activate only current insole object
+            bpy.ops.object.select_all( action = 'DESELECT' )
+            o.select = True
+            context.scene.objects.active = o            
+            
             bpy.ops.object.mode_set( mode = 'EDIT' )
             bpy.ops.mesh.select_non_manifold()
             
@@ -2120,8 +2115,16 @@ class create_insole_cast( bpy.types.Operator ):
                 )
             
             bpy.ops.object.transform_apply( rotation = True )
+        
+            bpy.ops.object.mode_set(  mode  = 'EDIT'    )
+            bpy.ops.mesh.select_mode( type  = 'VERT'    )
+            bpy.ops.mesh.select_all(  action = 'SELECT' )
             
-            cast = self.create_positive_cast( context, cast, o, inner_loop )
+            bpy.ops.mesh.normals_make_consistent() # Recalculate normals
+            
+            bpy.ops.object.mode_set( mode = 'OBJECT' )
+
+            cast = self.create_positive_cast( context, cast, o )
             
         # Call method to delete inner faces
         self.delete_inner_faces( context )
@@ -2137,8 +2140,8 @@ class create_insole_cast( bpy.types.Operator ):
             context.scene.objects[ name ].select = True
 
         bpy.ops.object.delete() # Delete selected objects
-            
-    def create_positive_cast( self, context, cast, insole, inner_loop ):
+
+    def create_positive_cast( self, context, cast, insole ):
         """ Expand insole to create a positive for cast creation """
         
         # Select cast
@@ -2269,10 +2272,26 @@ class create_insole_cast( bpy.types.Operator ):
         
         # Delete all inner faces
         bpy.ops.mesh.delete( type = 'FACE' )
+
+    def final_cleanup( self, context ):
+        ''' Recalculate normals, triangulate faces '''
+
+        o = context.object
+
+        # Select all verts
+        bpy.ops.object.mode_set(  mode   = 'EDIT'   )
+        bpy.ops.mesh.select_mode( type   = 'VERT'   )
+        bpy.ops.mesh.select_all(  action = 'SELECT' )
+        
+        bpy.ops.mesh.normals_make_consistent() # Recalculate normals
+        bpy.ops.mesh.quads_convert_to_tris()   # Triangulate
+
+        bpy.ops.object.mode_set(  mode = 'OBJECT' )
         
     def execute( self, context ):
         self.create_cast_block( context )
         self.prepare_insoles( context )
+        self.final_cleanup( context )
         
         return {'FINISHED'}
     
